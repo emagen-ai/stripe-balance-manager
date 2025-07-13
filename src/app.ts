@@ -1,12 +1,19 @@
 import express from 'express';
 import dotenv from 'dotenv';
+
+console.log('🚀 Starting app initialization...');
+
+dotenv.config();
+
+console.log('📦 Loading dependencies...');
+
 import { DatabaseManager } from './config/database';
 import { logger } from './config/logger';
 import { AutoRechargeScheduler } from './scheduler/AutoRechargeScheduler';
 import balanceRoutes from './routes/balance';
 import { requestLogger, authenticateUser } from './middleware/security';
 
-dotenv.config();
+console.log('✅ Dependencies loaded');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -41,15 +48,21 @@ const autoRechargeScheduler = new AutoRechargeScheduler();
 
 const startServer = async () => {
   try {
+    console.log('🔌 Connecting to database...');
     await DatabaseManager.connect();
+    console.log('✅ Database connected');
     
+    console.log('⏰ Starting auto recharge scheduler...');
     autoRechargeScheduler.start();
+    console.log('✅ Scheduler started');
     
     app.listen(port, () => {
+      console.log(`✅ Balance Manager server started on port ${port}`);
       logger.info(`Balance Manager server started on port ${port}`);
     });
     
   } catch (error) {
+    console.error('❌ Failed to start server:', error);
     logger.error('Failed to start server', error);
     process.exit(1);
   }
