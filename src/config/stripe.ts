@@ -87,4 +87,58 @@ export class StripeService {
     const feePercentage = parseFloat(process.env.DEFAULT_RECHARGE_FEE_PERCENTAGE || '0.029');
     return Math.round(amount * feePercentage * 100) / 100;
   }
+
+  // Payment method management
+  static async getCustomerPaymentMethods(customerId: string): Promise<Stripe.PaymentMethod[]> {
+    try {
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: customerId,
+        type: 'card',
+      });
+      
+      return paymentMethods.data;
+    } catch (error) {
+      logger.error('Failed to get customer payment methods', { customerId, error });
+      throw error;
+    }
+  }
+
+  static async attachPaymentMethodToCustomer(paymentMethodId: string, customerId: string): Promise<void> {
+    try {
+      await stripe.paymentMethods.attach(paymentMethodId, {
+        customer: customerId,
+      });
+      
+      logger.info('Payment method attached to customer', { paymentMethodId, customerId });
+    } catch (error) {
+      logger.error('Failed to attach payment method', { paymentMethodId, customerId, error });
+      throw error;
+    }
+  }
+
+  static async detachPaymentMethod(paymentMethodId: string): Promise<void> {
+    try {
+      await stripe.paymentMethods.detach(paymentMethodId);
+      
+      logger.info('Payment method detached', { paymentMethodId });
+    } catch (error) {
+      logger.error('Failed to detach payment method', { paymentMethodId, error });
+      throw error;
+    }
+  }
+
+  static async setDefaultPaymentMethod(customerId: string, paymentMethodId: string): Promise<void> {
+    try {
+      await stripe.customers.update(customerId, {
+        invoice_settings: {
+          default_payment_method: paymentMethodId,
+        },
+      });
+      
+      logger.info('Default payment method set', { customerId, paymentMethodId });
+    } catch (error) {
+      logger.error('Failed to set default payment method', { customerId, paymentMethodId, error });
+      throw error;
+    }
+  }
 }

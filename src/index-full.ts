@@ -11,6 +11,7 @@ import { DatabaseManager } from './config/database';
 import { logger } from './config/logger';
 import { AutoRechargeScheduler } from './scheduler/AutoRechargeScheduler';
 import balanceRoutes from './routes/balance';
+import paymentRoutes from './routes/payment';
 import { requestLogger, authenticateUser } from './middleware/security';
 
 console.log('✅ Dependencies loaded');
@@ -21,8 +22,12 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 app.use(requestLogger);
 
-// Add balance routes
+// Add routes
 app.use('/api/balance', authenticateUser, balanceRoutes);
+app.use('/api/payment', authenticateUser, paymentRoutes);
+
+// Serve static files for payment setup page
+app.use(express.static('public'));
 
 // Health check
 app.get('/health', (req, res) => {
