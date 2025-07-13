@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  stripeCustomerId String @unique
+  
+  balanceConfig BalanceConfig?
+  rechargeHistory RechargeRecord[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("users")
+}
+
+model BalanceConfig {
+  id       String @id @default(cuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 余额阈值设置
+  minimumBalance    Decimal @db.Decimal(10, 2) // 余额下限
+  targetBalance     Decimal @db.Decimal(10, 2) // 目标补充值
+  
+  // 自动充值设置
+  autoRechargeEnabled Boolean @default(true)
+  defaultPaymentMethodId String? // Stripe payment method ID
+  
+  // 限制设置
+  maxDailyRecharges   Int @default(3)
+  maxRechargeAmount   Decimal @db.Decimal(10, 2) @default(10000.00)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("balance_configs")
+}
+
+model RechargeRecord {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 充值信息
+  amount           Decimal @db.Decimal(10, 2) // 充值金额
+  fee              Decimal @db.Decimal(10, 2) // 手续费
+  totalCharged     Decimal @db.Decimal(10, 2) // 实际扣费总额
+  
+  // 余额信息
+  balanceBefore    Decimal @db.Decimal(10, 2) // 充值前余额
+  balanceAfter     Decimal @db.Decimal(10, 2) // 充值后余额
+  
+  // Stripe 信息
+  stripePaymentIntentId String @unique
+  stripeStatus         String // succeeded, failed, pending
+  
+  // 状态
+  status    RechargeStatus @default(PENDING)
+  isAutomatic Boolean @default(true) // 是否为自动充值
+  
+  failureReason String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("recharge_records")
+}
+
+model DailyRechargeLimit {
+  id       String @id @default(cuid())
+  userId   String
+  date     DateTime @db.Date
+  count    Int @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, date])
+  @@map("daily_recharge_limits")
+}
+
+enum RechargeStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
