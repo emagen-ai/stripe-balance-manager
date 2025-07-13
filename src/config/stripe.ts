@@ -141,4 +141,37 @@ export class StripeService {
       throw error;
     }
   }
+
+  // Customer Portal for official Stripe payment management UI
+  static async createCustomerPortalSession(customerId: string, returnUrl: string): Promise<string> {
+    try {
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl,
+      });
+      
+      logger.info('Customer portal session created', { customerId, sessionId: session.id });
+      return session.url;
+    } catch (error) {
+      logger.error('Failed to create customer portal session', { customerId, error });
+      throw error;
+    }
+  }
+
+  // Setup Intent for Payment Element
+  static async createSetupIntent(customerId: string): Promise<Stripe.SetupIntent> {
+    try {
+      const setupIntent = await stripe.setupIntents.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        usage: 'off_session', // For future payments
+      });
+      
+      logger.info('Setup intent created', { customerId, setupIntentId: setupIntent.id });
+      return setupIntent;
+    } catch (error) {
+      logger.error('Failed to create setup intent', { customerId, error });
+      throw error;
+    }
+  }
 }

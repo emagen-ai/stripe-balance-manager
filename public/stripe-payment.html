@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stripe Payment Setup - Balance Manager</title>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1a1a1a;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .option-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .option-card:hover {
+            border-color: #635bff;
+            box-shadow: 0 2px 8px rgba(99, 91, 255, 0.1);
+        }
+        .option-card.selected {
+            border-color: #635bff;
+            background: #f8f7ff;
+        }
+        .option-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+        .option-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        .option-features {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .option-features li {
+            color: #00b894;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        .option-features li::before {
+            content: "✓ ";
+            font-weight: bold;
+        }
+        .btn {
+            background: #635bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .btn:hover {
+            background: #5a52e8;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .info-box {
+            background: #e8f4fd;
+            border: 1px solid #0288d1;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            color: #0277bd;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .error {
+            background: #ffe6e6;
+            border: 1px solid #e53e3e;
+            color: #e53e3e;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        /* Payment Element container */
+        #payment-element {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .payment-form {
+            display: none;
+        }
+        
+        .payment-form.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💳 Payment Method Setup</h1>
+        <p class="subtitle">Choose how you'd like to manage your payment methods</p>
+        
+        <div class="info-box">
+            <h3>🏦 Your Balance Status</h3>
+            <p id="balance-info">Loading balance information...</p>
+        </div>
+
+        <!-- Option Selection -->
+        <div id="option-selection">
+            <div class="option-card" data-option="portal">
+                <div class="option-title">🏛️ Stripe Customer Portal</div>
+                <div class="option-description">
+                    Use Stripe's official customer portal to manage all your payment methods, billing, and invoices.
+                </div>
+                <ul class="option-features">
+                    <li>Full-featured Stripe interface</li>
+                    <li>Manage all payment methods</li>
+                    <li>View billing history</li>
+                    <li>Download invoices</li>
+                    <li>Most comprehensive option</li>
+                </ul>
+            </div>
+
+            <div class="option-card" data-option="element">
+                <div class="option-title">🎨 Payment Element</div>
+                <div class="option-description">
+                    Use Stripe's official Payment Element component for a seamless, embedded experience.
+                </div>
+                <ul class="option-features">
+                    <li>Official Stripe component</li>
+                    <li>Embedded in this page</li>
+                    <li>Optimized user experience</li>
+                    <li>Quick setup</li>
+                </ul>
+            </div>
+
+            <button id="continue-btn" class="btn" disabled>Continue with Selected Option</button>
+        </div>
+
+        <!-- Payment Element Form -->
+        <div id="payment-form" class="payment-form">
+            <h3>Add Payment Method</h3>
+            <form id="payment-element-form">
+                <div id="payment-element">
+                    <!-- Stripe Payment Element will mount here -->
+                </div>
+                <button type="submit" id="submit-payment" class="btn">
+                    💾 Add Payment Method
+                </button>
+            </form>
+        </div>
+
+        <div class="loading" id="loading">
+            <p>🔄 Processing...</p>
+        </div>
+
+        <div class="error" id="error">
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <script>
+        // Get user ID from URL parameter or use default test user
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('userId') || 'cmd19la3k0000d3bvxl8nch31';
+        
+        // Initialize Stripe
+        const stripe = Stripe('pk_test_51RWrqT04P0ZvQoZTZJFzqXCiMYbwG8XBx7LUaYbXj3QaXxXNqRxPlY8wCCRBLGbWWDnKhIBq2d9nxLq9fN5vEpgm00YfY9CXZq');
+        let elements, paymentElement;
+
+        // API base URL
+        const API_BASE = 'https://balance-api-production-eafc.up.railway.app';
+
+        // State
+        let selectedOption = null;
+
+        // Load balance info
+        async function loadBalanceInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/api/balance/status/${userId}`, {
+                    headers: { 'x-user-id': userId }
+                });
+                const data = await response.json();
+                
+                const balanceInfo = document.getElementById('balance-info');
+                if (data.needsRecharge) {
+                    balanceInfo.innerHTML = `
+                        <strong>Current Balance:</strong> $${data.currentBalance}<br>
+                        <strong>Minimum Required:</strong> $${data.minimumBalance}<br>
+                        <strong>Target Balance:</strong> $${data.targetBalance}<br>
+                        <span style="color: #e53e3e;">⚠️ Balance is below minimum - Auto-recharge ready when payment method is added</span>
+                    `;
+                } else {
+                    balanceInfo.innerHTML = `
+                        <strong>Current Balance:</strong> $${data.currentBalance}<br>
+                        <strong>Minimum Required:</strong> $${data.minimumBalance}<br>
+                        <span style="color: #00b894;">✅ Balance is sufficient</span>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('balance-info').textContent = 'Unable to load balance information';
+            }
+        }
+
+        // Option selection
+        document.querySelectorAll('.option-card').forEach(card => {
+            card.addEventListener('click', () => {
+                // Remove selection from all cards
+                document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+                
+                // Select this card
+                card.classList.add('selected');
+                selectedOption = card.dataset.option;
+                
+                // Enable continue button
+                document.getElementById('continue-btn').disabled = false;
+            });
+        });
+
+        // Continue button
+        document.getElementById('continue-btn').addEventListener('click', async () => {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+
+            try {
+                if (selectedOption === 'portal') {
+                    // Redirect to Stripe Customer Portal
+                    const response = await fetch(`${API_BASE}/api/payment/portal/${userId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-user-id': userId
+                        },
+                        body: JSON.stringify({
+                            returnUrl: window.location.href
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        window.location.href = data.portalUrl;
+                    } else {
+                        throw new Error(data.error || 'Failed to create portal session');
+                    }
+                    
+                } else if (selectedOption === 'element') {
+                    // Show Payment Element form
+                    await initializePaymentElement();
+                    document.getElementById('option-selection').style.display = 'none';
+                    document.getElementById('payment-form').classList.add('active');
+                }
+                
+            } catch (err) {
+                error.style.display = 'block';
+                document.getElementById('error-message').textContent = `❌ ${err.message}`;
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+
+        // Initialize Payment Element
+        async function initializePaymentElement() {
+            try {
+                // Create setup intent
+                const response = await fetch(`${API_BASE}/api/payment/setup-intent/${userId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-id': userId
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to create setup intent');
+                }
+
+                // Initialize Stripe Elements
+                elements = stripe.elements({
+                    clientSecret: data.clientSecret,
+                });
+
+                // Create and mount Payment Element
+                paymentElement = elements.create('payment');
+                paymentElement.mount('#payment-element');
+
+                document.getElementById('payment-element').style.display = 'block';
+
+            } catch (error) {
+                throw new Error(`Failed to initialize payment element: ${error.message}`);
+            }
+        }
+
+        // Handle Payment Element form submission
+        document.getElementById('payment-element-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const submitButton = document.getElementById('submit-payment');
+
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            submitButton.disabled = true;
+
+            try {
+                const {error: stripeError} = await stripe.confirmSetup({
+                    elements,
+                    confirmParams: {
+                        return_url: `${window.location.origin}/payment-success.html?userId=${userId}`,
+                    }
+                });
+
+                if (stripeError) {
+                    throw new Error(stripeError.message);
+                }
+
+                // If we reach here, the setup was successful
+                // (Usually the user will be redirected to return_url)
+                
+            } catch (err) {
+                error.style.display = 'block';
+                document.getElementById('error-message').textContent = `❌ ${err.message}`;
+            } finally {
+                loading.style.display = 'none';
+                submitButton.disabled = false;
+            }
+        });
+
+        // Initialize page
+        loadBalanceInfo();
+    </script>
+</body>
+</html>

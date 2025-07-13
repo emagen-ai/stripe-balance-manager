@@ -154,6 +154,82 @@ router.delete('/methods/:userId/:paymentMethodId', async (req, res) => {
   }
 });
 
+// Create Customer Portal session (Official Stripe UI)
+router.post('/portal/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { returnUrl } = req.body;
+
+    // Get user with Stripe customer ID
+    const user = await db.user.findUnique({
+      where: { id: userId }
+    });
+    if (!user || !user.stripeCustomerId) {
+      return res.status(404).json({ error: 'User not found or no Stripe customer' });
+    }
+
+    // Create customer portal session
+    const portalUrl = await StripeService.createCustomerPortalSession(
+      user.stripeCustomerId,
+      returnUrl || `${req.protocol}://${req.get('host')}/payment-success`
+    );
+
+    logger.info('Customer portal session created', { 
+      userId, 
+      customerId: user.stripeCustomerId 
+    });
+
+    res.json({
+      success: true,
+      portalUrl
+    });
+
+  } catch (error: any) {
+    logger.error('Failed to create customer portal session', { 
+      error: error.message, 
+      userId: req.params.userId 
+    });
+    res.status(500).json({ error: 'Failed to create customer portal session' });
+  }
+});
+
+// Create Setup Intent for Payment Element
+router.post('/setup-intent/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Get user with Stripe customer ID
+    const user = await db.user.findUnique({
+      where: { id: userId }
+    });
+    if (!user || !user.stripeCustomerId) {
+      return res.status(404).json({ error: 'User not found or no Stripe customer' });
+    }
+
+    // Create setup intent
+    const setupIntent = await StripeService.createSetupIntent(user.stripeCustomerId);
+
+    logger.info('Setup intent created', { 
+      userId, 
+      customerId: user.stripeCustomerId,
+      setupIntentId: setupIntent.id 
+    });
+
+    res.json({
+      success: true,
+      clientSecret: setupIntent.client_secret,
+      setupIntentId: setupIntent.id
+    });
+
+  } catch (error: any) {
+    logger.error('Failed to create setup intent', { 
+      error: error.message, 
+      userId: req.params.userId 
+    });
+    res.status(500).json({ error: 'Failed to create setup intent' });
+  }
+});
+
 // Set default payment method
 router.post('/methods/:userId/:paymentMethodId/default', async (req, res) => {
   try {

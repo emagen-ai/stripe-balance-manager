@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Setup Complete - Balance Manager</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+            text-align: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #00b894;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .info-box {
+            background: #e6fffa;
+            border: 1px solid #00b894;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            color: #00b894;
+        }
+        .btn {
+            background: #635bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px;
+        }
+        .btn:hover {
+            background: #5a52e8;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        .status-value {
+            font-weight: 500;
+        }
+        .status-good {
+            color: #00b894;
+        }
+        .status-pending {
+            color: #fdcb6e;
+        }
+        #balance-status {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✅</div>
+        <h1>Payment Method Added Successfully!</h1>
+        <p class="subtitle">Your payment method has been securely added and is ready for automatic balance recharges.</p>
+        
+        <div class="info-box">
+            <h3>🔄 Auto-Recharge System</h3>
+            <p>Your balance will now be automatically monitored every 5 minutes. When your balance falls below the minimum threshold, we'll automatically charge your payment method to reach your target balance.</p>
+        </div>
+
+        <div id="balance-status">
+            <h3>📊 Current Status</h3>
+            <div id="status-content">
+                <p>Loading your balance status...</p>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <a href="#" onclick="testRecharge()" class="btn">🧪 Test Manual Recharge</a>
+            <a href="stripe-payment.html" class="btn btn-secondary">⚙️ Manage Payment Methods</a>
+        </div>
+
+        <div id="test-result" style="margin-top: 20px; display: none;"></div>
+    </div>
+
+    <script>
+        // Get user ID from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('userId') || 'cmd19la3k0000d3bvxl8nch31';
+        
+        // API base URL
+        const API_BASE = 'https://balance-api-production-eafc.up.railway.app';
+
+        // Load balance status
+        async function loadBalanceStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/balance/status/${userId}`, {
+                    headers: { 'x-user-id': userId }
+                });
+                const data = await response.json();
+                
+                const statusContent = document.getElementById('status-content');
+                const statusItems = [
+                    {
+                        label: 'Current Balance',
+                        value: `$${data.currentBalance}`,
+                        status: data.currentBalance >= data.minimumBalance ? 'good' : 'pending'
+                    },
+                    {
+                        label: 'Minimum Required',
+                        value: `$${data.minimumBalance}`,
+                        status: 'good'
+                    },
+                    {
+                        label: 'Target Balance',
+                        value: `$${data.targetBalance}`,
+                        status: 'good'
+                    },
+                    {
+                        label: 'Auto-Recharge Status',
+                        value: data.needsRecharge ? 'Ready to charge' : 'No charge needed',
+                        status: data.needsRecharge ? 'pending' : 'good'
+                    }
+                ];
+
+                statusContent.innerHTML = statusItems.map(item => `
+                    <div class="status-item">
+                        <span>${item.label}:</span>
+                        <span class="status-value status-${item.status}">${item.value}</span>
+                    </div>
+                `).join('');
+
+                if (data.needsRecharge) {
+                    statusContent.innerHTML += `
+                        <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+                            <strong>💰 Next Recharge:</strong> $${data.calculation.rechargeAmount} + $${data.calculation.fee} fee = $${data.calculation.totalCharge} total
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                document.getElementById('status-content').innerHTML = `
+                    <p style="color: #e53e3e;">Unable to load balance status</p>
+                `;
+            }
+        }
+
+        // Test manual recharge
+        async function testRecharge() {
+            const testResult = document.getElementById('test-result');
+            testResult.style.display = 'block';
+            testResult.innerHTML = '<p>🔄 Testing manual recharge...</p>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/balance/recharge/${userId}`, {
+                    method: 'POST',
+                    headers: {
+                        'x-user-id': userId,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    testResult.innerHTML = `
+                        <div style="background: #e6fffa; border: 1px solid #00b894; padding: 15px; border-radius: 6px;">
+                            <h4 style="margin: 0 0 10px 0; color: #00b894;">✅ Recharge Successful!</h4>
+                            <p style="margin: 0;">Amount charged: $${data.amount}</p>
+                            <p style="margin: 0;">Payment ID: ${data.paymentIntentId}</p>
+                        </div>
+                    `;
+                    
+                    // Reload balance status
+                    setTimeout(loadBalanceStatus, 2000);
+                } else {
+                    testResult.innerHTML = `
+                        <div style="background: #ffe6e6; border: 1px solid #e53e3e; padding: 15px; border-radius: 6px;">
+                            <h4 style="margin: 0 0 10px 0; color: #e53e3e;">❌ Recharge Failed</h4>
+                            <p style="margin: 0;">${data.error || 'Unknown error'}</p>
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                testResult.innerHTML = `
+                    <div style="background: #ffe6e6; border: 1px solid #e53e3e; padding: 15px; border-radius: 6px;">
+                        <h4 style="margin: 0 0 10px 0; color: #e53e3e;">❌ Test Failed</h4>
+                        <p style="margin: 0;">Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize page
+        loadBalanceStatus();
+    </script>
+</body>
+</html>
