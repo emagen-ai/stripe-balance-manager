@@ -4,7 +4,7 @@
   "description": "Automatic balance management system with Stripe integration",
   "main": "index.js",
   "scripts": {
-    "start": "bash scripts/start.sh",
+    "start": "sh scripts/start.sh",
     "start:prod": "node dist/index.js",
     "dev": "nodemon src/index.ts",
     "build": "tsc",
