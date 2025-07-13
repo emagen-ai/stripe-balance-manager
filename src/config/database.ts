@@ -8,18 +8,9 @@ class DatabaseManager {
     if (!DatabaseManager.instance) {
       DatabaseManager.instance = new PrismaClient({
         log: [
-          { level: 'query', emit: 'event' },
           { level: 'error', emit: 'stdout' },
           { level: 'warn', emit: 'stdout' },
         ],
-      });
-
-      DatabaseManager.instance.$on('query', (e) => {
-        logger.debug('Query executed', {
-          query: e.query,
-          params: e.params,
-          duration: e.duration,
-        });
       });
     }
 
