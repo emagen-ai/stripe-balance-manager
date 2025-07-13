@@ -21,8 +21,8 @@ RUN npm run build
 # Remove dev dependencies
 RUN npm ci --production=true && npm cache clean --force
 
-# Create logs directory
-RUN mkdir -p logs
+# Create logs directory and make scripts executable
+RUN mkdir -p logs && chmod +x scripts/start.sh
 
 EXPOSE 3000
 
