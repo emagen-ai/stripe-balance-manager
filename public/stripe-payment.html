@@ -6,189 +6,496 @@
     <title>Stripe Payment Setup - Balance Manager</title>
     <script src="https://js.stripe.com/v3/"></script>
     <style>
+        :root {
+            --bg-primary: #0a0b0d;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --bg-hover: #30363d;
+            --border-primary: #30363d;
+            --border-focus: #58a6ff;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-primary: #58a6ff;
+            --accent-hover: #4493f8;
+            --success: #3fb950;
+            --warning: #d29922;
+            --error: #f85149;
+            --gradient: linear-gradient(135deg, #58a6ff 0%, #bc8cff 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .container {
             max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: #f8f9fa;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
         }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+
+        .header {
+            background: var(--gradient);
+            padding: 32px;
+            text-align: center;
+            position: relative;
         }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
         h1 {
-            color: #1a1a1a;
-            margin-bottom: 10px;
+            margin: 0 0 8px 0;
+            font-size: 32px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
+
         .subtitle {
-            color: #666;
-            margin-bottom: 30px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 16px;
+            margin: 0;
+            font-weight: 400;
         }
-        .option-card {
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
+
+        .content {
+            padding: 32px;
+        }
+
+        .info-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: 12px;
             padding: 20px;
-            margin: 15px 0;
-            cursor: pointer;
-            transition: all 0.2s ease;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
         }
-        .option-card:hover {
-            border-color: #635bff;
-            box-shadow: 0 2px 8px rgba(99, 91, 255, 0.1);
+
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--gradient);
         }
-        .option-card.selected {
-            border-color: #635bff;
-            background: #f8f7ff;
-        }
-        .option-title {
+
+        .info-card h3 {
+            margin: 0 0 12px 0;
+            color: var(--text-primary);
             font-size: 18px;
             font-weight: 600;
-            color: #1a1a1a;
+        }
+
+        .balance-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .balance-item {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .balance-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .balance-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .balance-value.low {
+            color: var(--error);
+        }
+
+        .balance-value.sufficient {
+            color: var(--success);
+        }
+
+        .option-card {
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-primary);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .option-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(88, 166, 255, 0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .option-card:hover::before {
+            left: 100%;
+        }
+
+        .option-card:hover {
+            border-color: var(--border-focus);
+            background: var(--bg-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .option-card.selected {
+            border-color: var(--accent-primary);
+            background: var(--bg-hover);
+            box-shadow: 0 0 0 1px var(--accent-primary), 0 8px 16px rgba(88, 166, 255, 0.2);
+        }
+
+        .option-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+
+        .option-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
             margin-bottom: 8px;
         }
+
         .option-description {
-            color: #666;
+            color: var(--text-secondary);
             font-size: 14px;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
+            line-height: 1.6;
         }
+
         .option-features {
             list-style: none;
             padding: 0;
             margin: 0;
         }
+
         .option-features li {
-            color: #00b894;
+            color: var(--success);
             font-size: 13px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
+
         .option-features li::before {
-            content: "✓ ";
+            content: "✓";
             font-weight: bold;
+            color: var(--success);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: rgba(63, 185, 80, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
         }
+
         .btn {
-            background: #635bff;
+            background: var(--gradient);
             color: white;
-            padding: 12px 24px;
             border: none;
-            border-radius: 6px;
+            border-radius: 12px;
+            padding: 16px 24px;
             font-size: 16px;
-            font-weight: 500;
+            font-weight: 600;
             cursor: pointer;
             width: 100%;
-            margin-top: 20px;
+            margin-top: 24px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
         .btn:hover {
-            background: #5a52e8;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 16px rgba(88, 166, 255, 0.3);
         }
+
         .btn:disabled {
-            background: #ccc;
+            background: var(--bg-hover);
+            color: var(--text-muted);
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
-        .info-box {
-            background: #e8f4fd;
-            border: 1px solid #0288d1;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        .info-box h3 {
-            margin: 0 0 10px 0;
-            color: #0277bd;
-        }
-        .loading {
-            display: none;
-            text-align: center;
-            margin: 20px 0;
-        }
-        .error {
-            background: #ffe6e6;
-            border: 1px solid #e53e3e;
-            color: #e53e3e;
-            padding: 15px;
-            border-radius: 6px;
-            margin: 20px 0;
+
+        .btn:disabled::before {
             display: none;
         }
-        
-        /* Payment Element container */
-        #payment-element {
-            margin: 20px 0;
-            display: none;
-        }
-        
+
         .payment-form {
             display: none;
         }
-        
+
         .payment-form.active {
             display: block;
+        }
+
+        .form-section {
+            margin: 24px 0;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        #payment-element {
+            background: var(--bg-primary);
+            border: 2px solid var(--border-primary);
+            border-radius: 12px;
+            padding: 1px;
+            transition: border-color 0.3s ease;
+            margin: 16px 0;
+        }
+
+        #payment-element:focus-within {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 32px 0;
+        }
+
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border-primary);
+            border-top: 3px solid var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 16px;
+            border-radius: 12px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .success {
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+            padding: 16px;
+            border-radius: 12px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .back-btn {
+            background: transparent;
+            border: 2px solid var(--border-primary);
+            color: var(--text-secondary);
+            border-radius: 12px;
+            padding: 12px 24px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-right: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            border-color: var(--border-focus);
+            color: var(--text-primary);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn-group .btn {
+            margin-top: 0;
+            flex: 1;
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 12px;
+            }
+            
+            .header {
+                padding: 24px 20px;
+            }
+            
+            .content {
+                padding: 24px 20px;
+            }
+            
+            .balance-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>💳 Payment Method Setup</h1>
-        <p class="subtitle">Choose how you'd like to manage your payment methods</p>
+        <div class="header">
+            <h1>💳 Payment Setup</h1>
+            <p class="subtitle">Secure payment method management powered by Stripe</p>
+        </div>
         
-        <div class="info-box">
-            <h3>🏦 Your Balance Status</h3>
-            <p id="balance-info">Loading balance information...</p>
-        </div>
-
-        <!-- Option Selection -->
-        <div id="option-selection">
-            <div class="option-card" data-option="portal">
-                <div class="option-title">🏛️ Stripe Customer Portal</div>
-                <div class="option-description">
-                    Use Stripe's official customer portal to manage all your payment methods, billing, and invoices.
-                </div>
-                <ul class="option-features">
-                    <li>Full-featured Stripe interface</li>
-                    <li>Manage all payment methods</li>
-                    <li>View billing history</li>
-                    <li>Download invoices</li>
-                    <li>Most comprehensive option</li>
-                </ul>
+        <div class="content">
+            <div class="info-card">
+                <h3>🏦 Balance Overview</h3>
+                <div id="balance-info">Loading balance information...</div>
             </div>
 
-            <div class="option-card" data-option="element">
-                <div class="option-title">🎨 Payment Element</div>
-                <div class="option-description">
-                    Use Stripe's official Payment Element component for a seamless, embedded experience.
+            <!-- Option Selection -->
+            <div id="option-selection">
+                <div class="option-card" data-option="portal">
+                    <div class="option-icon">🏛️</div>
+                    <div class="option-title">Customer Portal</div>
+                    <div class="option-description">
+                        Complete Stripe dashboard with full payment management, billing history, and invoice downloads.
+                    </div>
+                    <ul class="option-features">
+                        <li>Full Stripe interface</li>
+                        <li>Payment method management</li>
+                        <li>Billing history & invoices</li>
+                        <li>Subscription management</li>
+                        <li>Enterprise-grade security</li>
+                    </ul>
                 </div>
-                <ul class="option-features">
-                    <li>Official Stripe component</li>
-                    <li>Embedded in this page</li>
-                    <li>Optimized user experience</li>
-                    <li>Quick setup</li>
-                </ul>
-            </div>
 
-            <button id="continue-btn" class="btn" disabled>Continue with Selected Option</button>
-        </div>
-
-        <!-- Payment Element Form -->
-        <div id="payment-form" class="payment-form">
-            <h3>Add Payment Method</h3>
-            <form id="payment-element-form">
-                <div id="payment-element">
-                    <!-- Stripe Payment Element will mount here -->
+                <div class="option-card" data-option="element">
+                    <div class="option-icon">⚡</div>
+                    <div class="option-title">Payment Element</div>
+                    <div class="option-description">
+                        Streamlined, embedded payment setup using Stripe's optimized Payment Element component.
+                    </div>
+                    <ul class="option-features">
+                        <li>Official Stripe component</li>
+                        <li>Embedded experience</li>
+                        <li>Optimized conversion</li>
+                        <li>Instant setup</li>
+                        <li>Mobile-optimized</li>
+                    </ul>
                 </div>
-                <button type="submit" id="submit-payment" class="btn">
-                    💾 Add Payment Method
+
+                <button id="continue-btn" class="btn" disabled>
+                    Continue with Selected Option
                 </button>
-            </form>
-        </div>
+            </div>
 
-        <div class="loading" id="loading">
-            <p>🔄 Processing...</p>
-        </div>
+            <!-- Payment Element Form -->
+            <div id="payment-form" class="payment-form">
+                <div class="form-section">
+                    <label class="form-label">💳 Payment Information</label>
+                    <div id="payment-element">
+                        <!-- Stripe Payment Element will mount here -->
+                    </div>
+                </div>
+                
+                <form id="payment-element-form">
+                    <div class="btn-group">
+                        <button type="button" class="back-btn" onclick="goBack()">
+                            ← Back
+                        </button>
+                        <button type="submit" id="submit-payment" class="btn">
+                            💾 Add Payment Method
+                        </button>
+                    </div>
+                </form>
+            </div>
 
-        <div class="error" id="error">
-            <p id="error-message"></p>
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>Processing your request...</p>
+            </div>
+
+            <div class="error" id="error">
+                <strong>❌ Error</strong><br>
+                <span id="error-message"></span>
+            </div>
+
+            <div class="success" id="success">
+                <strong>✅ Success</strong><br>
+                <span id="success-message"></span>
+            </div>
         </div>
     </div>
 
@@ -216,22 +523,46 @@
                 const data = await response.json();
                 
                 const balanceInfo = document.getElementById('balance-info');
+                const balanceClass = data.needsRecharge ? 'low' : 'sufficient';
+                const statusIcon = data.needsRecharge ? '⚠️' : '✅';
+                const statusText = data.needsRecharge ? 'Payment method required for auto-recharge' : 'Balance is sufficient';
+                
+                balanceInfo.innerHTML = `
+                    <div class="balance-grid">
+                        <div class="balance-item">
+                            <div class="balance-label">Current Balance</div>
+                            <div class="balance-value ${balanceClass}">$${data.currentBalance}</div>
+                        </div>
+                        <div class="balance-item">
+                            <div class="balance-label">Minimum Required</div>
+                            <div class="balance-value">$${data.minimumBalance}</div>
+                        </div>
+                        <div class="balance-item">
+                            <div class="balance-label">Target Balance</div>
+                            <div class="balance-value">$${data.targetBalance}</div>
+                        </div>
+                        <div class="balance-item">
+                            <div class="balance-label">Status</div>
+                            <div class="balance-value ${balanceClass}" style="font-size: 14px;">
+                                ${statusIcon} ${statusText}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
                 if (data.needsRecharge) {
-                    balanceInfo.innerHTML = `
-                        <strong>Current Balance:</strong> $${data.currentBalance}<br>
-                        <strong>Minimum Required:</strong> $${data.minimumBalance}<br>
-                        <strong>Target Balance:</strong> $${data.targetBalance}<br>
-                        <span style="color: #e53e3e;">⚠️ Balance is below minimum - Auto-recharge ready when payment method is added</span>
-                    `;
-                } else {
-                    balanceInfo.innerHTML = `
-                        <strong>Current Balance:</strong> $${data.currentBalance}<br>
-                        <strong>Minimum Required:</strong> $${data.minimumBalance}<br>
-                        <span style="color: #00b894;">✅ Balance is sufficient</span>
+                    balanceInfo.innerHTML += `
+                        <div style="margin-top: 16px; padding: 12px; background: rgba(248, 81, 73, 0.1); border: 1px solid var(--error); border-radius: 8px; font-size: 14px;">
+                            <strong>Next Recharge:</strong> $${data.calculation.rechargeAmount} + $${data.calculation.fee} fee = $${data.calculation.totalCharge} total
+                        </div>
                     `;
                 }
             } catch (error) {
-                document.getElementById('balance-info').textContent = 'Unable to load balance information';
+                document.getElementById('balance-info').innerHTML = `
+                    <div style="color: var(--error); text-align: center; padding: 20px;">
+                        Unable to load balance information
+                    </div>
+                `;
             }
         }
 
@@ -295,6 +626,19 @@
             }
         });
 
+        // Go back to option selection
+        function goBack() {
+            document.getElementById('payment-form').classList.remove('active');
+            document.getElementById('option-selection').style.display = 'block';
+            
+            // Clean up payment element
+            if (paymentElement) {
+                paymentElement.unmount();
+                paymentElement = null;
+                elements = null;
+            }
+        }
+
         // Initialize Payment Element
         async function initializePaymentElement() {
             try {
@@ -313,13 +657,63 @@
                     throw new Error(data.error || 'Failed to create setup intent');
                 }
 
-                // Initialize Stripe Elements
+                // Initialize Stripe Elements with dark theme
                 elements = stripe.elements({
                     clientSecret: data.clientSecret,
+                    appearance: {
+                        theme: 'night',
+                        variables: {
+                            colorPrimary: '#58a6ff',
+                            colorBackground: '#0a0b0d',
+                            colorText: '#f0f6fc',
+                            colorDanger: '#f85149',
+                            colorSuccess: '#3fb950',
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif',
+                            spacingUnit: '6px',
+                            borderRadius: '12px',
+                        },
+                        rules: {
+                            '.Input': {
+                                backgroundColor: '#21262d',
+                                border: '2px solid #30363d',
+                                borderRadius: '12px',
+                                padding: '16px',
+                                fontSize: '16px',
+                                color: '#f0f6fc',
+                            },
+                            '.Input:focus': {
+                                borderColor: '#58a6ff',
+                                boxShadow: '0 0 0 3px rgba(88, 166, 255, 0.1)',
+                            },
+                            '.Label': {
+                                color: '#f0f6fc',
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                marginBottom: '8px',
+                            },
+                            '.Tab': {
+                                backgroundColor: '#21262d',
+                                border: '2px solid #30363d',
+                                color: '#8b949e',
+                                borderRadius: '12px',
+                            },
+                            '.Tab:hover': {
+                                backgroundColor: '#30363d',
+                                color: '#f0f6fc',
+                            },
+                            '.Tab--selected': {
+                                backgroundColor: '#58a6ff',
+                                borderColor: '#58a6ff',
+                                color: 'white',
+                            },
+                        }
+                    }
                 });
 
                 // Create and mount Payment Element
-                paymentElement = elements.create('payment');
+                paymentElement = elements.create('payment', {
+                    layout: 'tabs'
+                });
                 paymentElement.mount('#payment-element');
 
                 document.getElementById('payment-element').style.display = 'block';
