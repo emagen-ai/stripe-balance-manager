@@ -605,7 +605,7 @@
         // Check if Stripe is blocked by ad blocker
         function checkStripeAvailability() {
             try {
-                stripe = Stripe('pk_test_51RWrqT04P0ZvQoZTZJFzqXCiMYbwG8XBx7LUaYbXj3QaXxXNqRxPlY8wCCRBLGbWWDnKhIBq2d9nxLq9fN5vEpgm00YfY9CXZq');
+                stripe = Stripe('pk_test_51RWrqT04P0ZvQoZT9sEhnrZKCR5vJNSEzenXNXo3KchE3h0zDnzKth6ihCJKSJIE2iSrTi6E6sU6U2RvuMkWiF8U00APPrBeiv');
                 return true;
             } catch (error) {
                 console.error('Stripe initialization failed:', error);
@@ -903,7 +903,7 @@
             return new Promise((resolve) => {
                 try {
                     // Test if we can make a basic Stripe API call
-                    const testStripe = Stripe('pk_test_51RWrqT04P0ZvQoZTZJFzqXCiMYbwG8XBx7LUaYbXj3QaXxXNqRxPlY8wCCRBLGbWWDnKhIBq2d9nxLq9fN5vEpgm00YfY9CXZq');
+                    const testStripe = Stripe('pk_test_51RWrqT04P0ZvQoZT9sEhnrZKCR5vJNSEzenXNXo3KchE3h0zDnzKth6ihCJKSJIE2iSrTi6E6sU6U2RvuMkWiF8U00APPrBeiv');
                     
                     // Create a simple elements instance to test connectivity
                     const testElements = testStripe.elements();
