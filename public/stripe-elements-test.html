@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stripe Elements Test - Balance Manager</title>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0b0d;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --bg-hover: #30363d;
+            --border-primary: #30363d;
+            --border-focus: #58a6ff;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-primary: #58a6ff;
+            --success: #3fb950;
+            --error: #f85149;
+            --warning: #d29922;
+            --gradient: linear-gradient(135deg, #58a6ff 0%, #bc8cff 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .header {
+            background: var(--gradient);
+            padding: 32px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 32px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 16px;
+            margin: 0;
+            font-weight: 400;
+        }
+
+        .content {
+            padding: 32px;
+        }
+
+        .form-section {
+            margin: 24px 0;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        #payment-element {
+            background: var(--bg-primary);
+            border: 2px solid var(--border-primary);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+            min-height: 200px;
+            transition: border-color 0.3s ease;
+        }
+
+        #payment-element:focus-within {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
+
+        .btn {
+            background: var(--gradient);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 16px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 24px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 16px rgba(88, 166, 255, 0.3);
+        }
+
+        .btn:disabled {
+            background: var(--bg-hover);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 32px 0;
+        }
+
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border-primary);
+            border-top: 3px solid var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error, .success {
+            padding: 16px;
+            border-radius: 12px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .error {
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+
+        .success {
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        .status-info {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .debug-info {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 12px 0;
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 Stripe Elements Test</h1>
+            <p class="subtitle">Testing Stripe Payment Element integration</p>
+        </div>
+        
+        <div class="content">
+            <div class="status-info">
+                <strong>Current Status:</strong> <span id="current-status">Initializing...</span>
+            </div>
+
+            <div class="form-section">
+                <label class="form-label">💳 Payment Information</label>
+                <div id="payment-element">
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        Loading Stripe Elements...
+                    </div>
+                </div>
+                <div id="payment-errors" class="error" style="display: none;"></div>
+            </div>
+
+            <form id="payment-form">
+                <button type="submit" id="submit-button" class="btn" disabled>
+                    💾 Test Payment Setup
+                </button>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>Processing your request...</p>
+            </div>
+
+            <div class="error" id="error">
+                <strong>❌ Error:</strong><br>
+                <span id="error-message"></span>
+            </div>
+
+            <div class="success" id="success">
+                <strong>✅ Success:</strong><br>
+                <span id="success-message"></span>
+            </div>
+
+            <div class="debug-info" id="debug-info">
+                Debug Information:
+                - Stripe.js loaded: <span id="stripe-loaded">checking...</span>
+                - Setup Intent: <span id="setup-intent-status">pending...</span>
+                - Elements created: <span id="elements-created">pending...</span>
+                - Payment Element mounted: <span id="payment-mounted">pending...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const userId = 'cmd19la3k0000d3bvxl8nch31';
+        const API_BASE = 'https://balance-api-production-eafc.up.railway.app';
+        
+        // Global variables
+        let stripe;
+        let elements;
+        let paymentElement;
+        let setupIntentClientSecret;
+
+        // Debug logging
+        function debugLog(message) {
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        function updateDebugInfo(key, value) {
+            const element = document.getElementById(key);
+            if (element) {
+                element.textContent = value;
+                element.style.color = value.includes('✅') ? 'var(--success)' : 
+                                     value.includes('❌') ? 'var(--error)' : 
+                                     'var(--text-secondary)';
+            }
+        }
+
+        function updateStatus(message) {
+            document.getElementById('current-status').textContent = message;
+        }
+
+        // Initialize Stripe
+        async function initializeStripe() {
+            try {
+                updateStatus('Loading Stripe.js...');
+                
+                // Check if Stripe is available
+                if (typeof Stripe === 'undefined') {
+                    throw new Error('Stripe.js failed to load');
+                }
+
+                stripe = Stripe('pk_test_51RWrqT04P0ZvQoZTZJFzqXCiMYbwG8XBx7LUaYbXj3QaXxXNqRxPlY8wCCRBLGbWWDnKhIBq2d9nxLq9fN5vEpgm00YfY9CXZq');
+                updateDebugInfo('stripe-loaded', '✅ Success');
+                debugLog('Stripe initialized successfully');
+
+                return true;
+            } catch (error) {
+                updateDebugInfo('stripe-loaded', `❌ ${error.message}`);
+                debugLog(`Stripe initialization failed: ${error.message}`);
+                return false;
+            }
+        }
+
+        // Create setup intent
+        async function createSetupIntent() {
+            try {
+                updateStatus('Creating setup intent...');
+                
+                const response = await fetch(`${API_BASE}/api/payment/setup-intent/${userId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-id': userId
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to create setup intent');
+                }
+
+                setupIntentClientSecret = data.clientSecret;
+                updateDebugInfo('setup-intent-status', '✅ Created');
+                debugLog('Setup intent created successfully');
+
+                return data.clientSecret;
+            } catch (error) {
+                updateDebugInfo('setup-intent-status', `❌ ${error.message}`);
+                debugLog(`Setup intent creation failed: ${error.message}`);
+                throw error;
+            }
+        }
+
+        // Initialize Elements
+        async function initializeElements(clientSecret) {
+            try {
+                updateStatus('Initializing Elements...');
+                
+                elements = stripe.elements({
+                    clientSecret: clientSecret,
+                    appearance: {
+                        theme: 'night',
+                        variables: {
+                            colorPrimary: '#58a6ff',
+                            colorBackground: '#0a0b0d',
+                            colorText: '#f0f6fc',
+                            colorDanger: '#f85149',
+                            colorSuccess: '#3fb950',
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif',
+                            spacingUnit: '6px',
+                            borderRadius: '12px',
+                            fontSizeBase: '16px',
+                        },
+                        rules: {
+                            '.Input': {
+                                backgroundColor: '#21262d',
+                                border: '2px solid #30363d',
+                                borderRadius: '12px',
+                                padding: '16px',
+                                fontSize: '16px',
+                                color: '#f0f6fc',
+                            },
+                            '.Input:focus': {
+                                borderColor: '#58a6ff',
+                                boxShadow: '0 0 0 3px rgba(88, 166, 255, 0.1)',
+                            },
+                            '.Label': {
+                                color: '#f0f6fc',
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                marginBottom: '8px',
+                            },
+                            '.Tab': {
+                                backgroundColor: '#21262d',
+                                border: '2px solid #30363d',
+                                color: '#8b949e',
+                                borderRadius: '12px',
+                                padding: '12px 16px',
+                            },
+                            '.Tab:hover': {
+                                backgroundColor: '#30363d',
+                                color: '#f0f6fc',
+                            },
+                            '.Tab--selected': {
+                                backgroundColor: '#58a6ff',
+                                borderColor: '#58a6ff',
+                                color: 'white',
+                            },
+                            '.TabIcon': {
+                                color: 'currentColor',
+                            },
+                            '.Error': {
+                                color: '#f85149',
+                                fontSize: '14px',
+                            }
+                        }
+                    }
+                });
+
+                updateDebugInfo('elements-created', '✅ Created');
+                debugLog('Elements initialized successfully');
+
+                return true;
+            } catch (error) {
+                updateDebugInfo('elements-created', `❌ ${error.message}`);
+                debugLog(`Elements initialization failed: ${error.message}`);
+                throw error;
+            }
+        }
+
+        // Mount Payment Element
+        async function mountPaymentElement() {
+            try {
+                updateStatus('Mounting Payment Element...');
+                
+                paymentElement = elements.create('payment', {
+                    layout: 'tabs',
+                    defaultValues: {
+                        billingDetails: {
+                            address: {
+                                country: 'US',
+                            }
+                        }
+                    }
+                });
+
+                // Add event listeners
+                paymentElement.on('ready', () => {
+                    updateDebugInfo('payment-mounted', '✅ Mounted and Ready');
+                    updateStatus('Payment Element ready for input');
+                    document.getElementById('submit-button').disabled = false;
+                    debugLog('Payment Element is ready');
+                });
+
+                paymentElement.on('change', (event) => {
+                    const errorElement = document.getElementById('payment-errors');
+                    if (event.error) {
+                        errorElement.textContent = event.error.message;
+                        errorElement.style.display = 'block';
+                        debugLog(`Payment Element error: ${event.error.message}`);
+                    } else {
+                        errorElement.style.display = 'none';
+                        debugLog('Payment Element changed - no errors');
+                    }
+                });
+
+                paymentElement.on('loaderror', (event) => {
+                    updateDebugInfo('payment-mounted', `❌ Load Error: ${event.error.message}`);
+                    debugLog(`Payment Element load error: ${event.error.message}`);
+                    
+                    const errorElement = document.getElementById('error');
+                    const errorMessage = document.getElementById('error-message');
+                    errorMessage.textContent = `Payment Element failed to load: ${event.error.message}`;
+                    errorElement.style.display = 'block';
+                });
+
+                // Mount the element
+                paymentElement.mount('#payment-element');
+                debugLog('Payment Element mount initiated');
+
+                return true;
+            } catch (error) {
+                updateDebugInfo('payment-mounted', `❌ ${error.message}`);
+                debugLog(`Payment Element mounting failed: ${error.message}`);
+                throw error;
+            }
+        }
+
+        // Handle form submission
+        async function handleSubmit(event) {
+            event.preventDefault();
+
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const success = document.getElementById('success');
+            const submitButton = document.getElementById('submit-button');
+
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            success.style.display = 'none';
+            submitButton.disabled = true;
+
+            try {
+                updateStatus('Processing payment setup...');
+
+                const {error: stripeError} = await stripe.confirmSetup({
+                    elements,
+                    confirmParams: {
+                        return_url: `${window.location.origin}/payment-success.html?userId=${userId}`,
+                    },
+                    redirect: 'if_required'
+                });
+
+                if (stripeError) {
+                    throw new Error(stripeError.message);
+                }
+
+                // Success
+                updateStatus('Payment method setup completed!');
+                success.style.display = 'block';
+                document.getElementById('success-message').textContent = 'Payment method has been successfully added and verified!';
+                
+                debugLog('Payment setup completed successfully');
+
+            } catch (err) {
+                updateStatus('Payment setup failed');
+                error.style.display = 'block';
+                document.getElementById('error-message').textContent = err.message;
+                debugLog(`Payment setup failed: ${err.message}`);
+            } finally {
+                loading.style.display = 'none';
+                submitButton.disabled = false;
+            }
+        }
+
+        // Initialize everything
+        async function initialize() {
+            try {
+                // Step 1: Initialize Stripe
+                const stripeOk = await initializeStripe();
+                if (!stripeOk) {
+                    throw new Error('Failed to initialize Stripe');
+                }
+
+                // Step 2: Create setup intent
+                const clientSecret = await createSetupIntent();
+
+                // Step 3: Initialize Elements
+                await initializeElements(clientSecret);
+
+                // Step 4: Mount Payment Element
+                await mountPaymentElement();
+
+                debugLog('Full initialization completed successfully');
+
+            } catch (error) {
+                updateStatus('Initialization failed');
+                const errorElement = document.getElementById('error');
+                const errorMessage = document.getElementById('error-message');
+                errorMessage.textContent = `Initialization failed: ${error.message}`;
+                errorElement.style.display = 'block';
+                debugLog(`Initialization failed: ${error.message}`);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('payment-form').addEventListener('submit', handleSubmit);
+
+        // Start initialization when page loads
+        document.addEventListener('DOMContentLoaded', initialize);
+    </script>
+</body>
+</html>
