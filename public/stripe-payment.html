@@ -388,6 +388,96 @@
             flex: 1;
         }
 
+        .ad-blocker-warning {
+            background: var(--bg-tertiary);
+            border: 2px solid var(--error);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ad-blocker-warning::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--error) 0%, var(--warning) 100%);
+        }
+
+        .warning-header h3 {
+            margin: 0 0 16px 0;
+            color: var(--error);
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .warning-content {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .warning-content p {
+            margin: 12px 0;
+        }
+
+        .warning-content ul {
+            margin: 12px 0;
+            padding-left: 20px;
+        }
+
+        .warning-content li {
+            margin: 8px 0;
+            color: var(--text-primary);
+        }
+
+        .warning-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .warning-actions .btn {
+            margin-top: 0;
+            flex: 1;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid var(--border-primary);
+            color: var(--text-secondary);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--border-focus);
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .connection-test {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .connection-test.success {
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .connection-test.error {
+            border-color: var(--error);
+            color: var(--error);
+        }
+
         @media (max-width: 640px) {
             body {
                 padding: 12px;
@@ -406,6 +496,10 @@
             }
             
             .btn-group {
+                flex-direction: column;
+            }
+            
+            .warning-actions {
                 flex-direction: column;
             }
         }
@@ -504,9 +598,57 @@
         const urlParams = new URLSearchParams(window.location.search);
         const userId = urlParams.get('userId') || 'cmd19la3k0000d3bvxl8nch31';
         
-        // Initialize Stripe
-        const stripe = Stripe('pk_test_51RWrqT04P0ZvQoZTZJFzqXCiMYbwG8XBx7LUaYbXj3QaXxXNqRxPlY8wCCRBLGbWWDnKhIBq2d9nxLq9fN5vEpgm00YfY9CXZq');
-        let elements, paymentElement;
+        // Initialize Stripe with error handling
+        let stripe, elements, paymentElement;
+        let stripeBlockedByAdBlocker = false;
+        
+        // Check if Stripe is blocked by ad blocker
+        function checkStripeAvailability() {
+            try {
+                stripe = Stripe('pk_test_51RWrqT04P0ZvQoZTZJFzqXCiMYbwG8XBx7LUaYbXj3QaXxXNqRxPlY8wCCRBLGbWWDnKhIBq2d9nxLq9fN5vEpgm00YfY9CXZq');
+                return true;
+            } catch (error) {
+                console.error('Stripe initialization failed:', error);
+                stripeBlockedByAdBlocker = true;
+                return false;
+            }
+        }
+        
+        // Show ad blocker detection message
+        function showAdBlockerMessage() {
+            const container = document.querySelector('.content');
+            const adBlockerWarning = document.createElement('div');
+            adBlockerWarning.className = 'ad-blocker-warning';
+            adBlockerWarning.innerHTML = `
+                <div class="warning-header">
+                    <h3>🚫 广告拦截器检测</h3>
+                </div>
+                <div class="warning-content">
+                    <p>检测到您的浏览器或扩展程序正在阻止Stripe支付组件的加载。</p>
+                    <p><strong>解决方案：</strong></p>
+                    <ul>
+                        <li>暂时禁用广告拦截器（如AdBlock、uBlock Origin等）</li>
+                        <li>将此网站添加到广告拦截器白名单</li>
+                        <li>或者使用隐私模式/无痕模式访问</li>
+                    </ul>
+                    <p><strong>为什么需要这样做？</strong></p>
+                    <p>Stripe是全球领先的支付处理平台，需要加载必要的安全组件来保护您的支付信息。广告拦截器有时会误拦截这些组件。</p>
+                </div>
+                <div class="warning-actions">
+                    <button onclick="location.reload()" class="btn">🔄 重新加载页面</button>
+                    <button onclick="hideAdBlockerWarning()" class="btn btn-secondary">我已处理，继续</button>
+                </div>
+            `;
+            
+            container.insertBefore(adBlockerWarning, container.firstChild);
+        }
+        
+        function hideAdBlockerWarning() {
+            const warning = document.querySelector('.ad-blocker-warning');
+            if (warning) {
+                warning.remove();
+            }
+        }
 
         // API base URL
         const API_BASE = 'https://balance-api-production-eafc.up.railway.app';
@@ -581,50 +723,6 @@
             });
         });
 
-        // Continue button
-        document.getElementById('continue-btn').addEventListener('click', async () => {
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-            
-            loading.style.display = 'block';
-            error.style.display = 'none';
-
-            try {
-                if (selectedOption === 'portal') {
-                    // Redirect to Stripe Customer Portal
-                    const response = await fetch(`${API_BASE}/api/payment/portal/${userId}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-user-id': userId
-                        },
-                        body: JSON.stringify({
-                            returnUrl: window.location.href
-                        })
-                    });
-
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        window.location.href = data.portalUrl;
-                    } else {
-                        throw new Error(data.error || 'Failed to create portal session');
-                    }
-                    
-                } else if (selectedOption === 'element') {
-                    // Show Payment Element form
-                    await initializePaymentElement();
-                    document.getElementById('option-selection').style.display = 'none';
-                    document.getElementById('payment-form').classList.add('active');
-                }
-                
-            } catch (err) {
-                error.style.display = 'block';
-                document.getElementById('error-message').textContent = `❌ ${err.message}`;
-            } finally {
-                loading.style.display = 'none';
-            }
-        });
 
         // Go back to option selection
         function goBack() {
@@ -642,6 +740,11 @@
         // Initialize Payment Element
         async function initializePaymentElement() {
             try {
+                // Check if Stripe is available
+                if (!stripe) {
+                    throw new Error('Stripe not available - please disable ad blocker');
+                }
+
                 // Create setup intent
                 const response = await fetch(`${API_BASE}/api/payment/setup-intent/${userId}`, {
                     method: 'POST',
@@ -714,11 +817,25 @@
                 paymentElement = elements.create('payment', {
                     layout: 'tabs'
                 });
+                
+                // Add error listener for payment element
+                paymentElement.on('loaderror', (event) => {
+                    console.error('Payment Element load error:', event.error);
+                    if (event.error.message.includes('blocked') || event.error.message.includes('fetch')) {
+                        stripeBlockedByAdBlocker = true;
+                        showAdBlockerMessage();
+                    }
+                });
+                
                 paymentElement.mount('#payment-element');
-
                 document.getElementById('payment-element').style.display = 'block';
 
             } catch (error) {
+                console.error('Payment element initialization failed:', error);
+                if (error.message.includes('ad blocker') || error.message.includes('blocked')) {
+                    stripeBlockedByAdBlocker = true;
+                    showAdBlockerMessage();
+                }
                 throw new Error(`Failed to initialize payment element: ${error.message}`);
             }
         }
@@ -760,7 +877,108 @@
         });
 
         // Initialize page
-        loadBalanceInfo();
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check Stripe availability first
+            if (!checkStripeAvailability()) {
+                showAdBlockerMessage();
+                // Still load balance info but disable payment options
+                loadBalanceInfo();
+                // Disable payment option cards
+                document.querySelectorAll('.option-card').forEach(card => {
+                    card.style.opacity = '0.5';
+                    card.style.cursor = 'not-allowed';
+                    card.onclick = null;
+                });
+                document.getElementById('continue-btn').disabled = true;
+                document.getElementById('continue-btn').textContent = '请先处理广告拦截器问题';
+                return;
+            }
+            
+            // Normal initialization
+            loadBalanceInfo();
+        });
+
+        // Test Stripe connection
+        function testStripeConnection() {
+            return new Promise((resolve) => {
+                try {
+                    // Test if we can make a basic Stripe API call
+                    const testStripe = Stripe('pk_test_51RWrqT04P0ZvQoZTZJFzqXCiMYbwG8XBx7LUaYbXj3QaXxXNqRxPlY8wCCRBLGbWWDnKhIBq2d9nxLq9fN5vEpgm00YfY9CXZq');
+                    
+                    // Create a simple elements instance to test connectivity
+                    const testElements = testStripe.elements();
+                    
+                    // If we get here without error, Stripe is working
+                    resolve(true);
+                } catch (error) {
+                    console.error('Stripe connection test failed:', error);
+                    resolve(false);
+                }
+            });
+        }
+
+        // Enhanced continue button handler
+        document.getElementById('continue-btn').addEventListener('click', async () => {
+            if (stripeBlockedByAdBlocker) {
+                showAdBlockerMessage();
+                return;
+            }
+            
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+
+            try {
+                if (selectedOption === 'portal') {
+                    // Redirect to Stripe Customer Portal
+                    const response = await fetch(`${API_BASE}/api/payment/portal/${userId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-user-id': userId
+                        },
+                        body: JSON.stringify({
+                            returnUrl: window.location.href
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        window.location.href = data.portalUrl;
+                    } else {
+                        throw new Error(data.error || 'Failed to create portal session');
+                    }
+                    
+                } else if (selectedOption === 'element') {
+                    // Test connection first
+                    const connectionGood = await testStripeConnection();
+                    if (!connectionGood) {
+                        stripeBlockedByAdBlocker = true;
+                        showAdBlockerMessage();
+                        return;
+                    }
+                    
+                    // Show Payment Element form
+                    await initializePaymentElement();
+                    document.getElementById('option-selection').style.display = 'none';
+                    document.getElementById('payment-form').classList.add('active');
+                }
+                
+            } catch (err) {
+                error.style.display = 'block';
+                document.getElementById('error-message').textContent = err.message;
+                
+                if (err.message.includes('blocked') || err.message.includes('fetch')) {
+                    stripeBlockedByAdBlocker = true;
+                    showAdBlockerMessage();
+                }
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
     </script>
 </body>
 </html>
