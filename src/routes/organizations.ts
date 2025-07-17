@@ -217,7 +217,7 @@ router.post('/:organizationId/sync', async (req, res) => {
 
       // 更新配额
       const newQuota = Math.max(100, Number(organization.target_balance));
-      await kmsClient.updateOrganizationQuota(kmsOrg.id, newQuota);
+      await kmsClient.updateOrganizationQuota(organizationId, newQuota);
 
       logger.info('组织配额同步成功', {
         c_organization_id: organizationId,

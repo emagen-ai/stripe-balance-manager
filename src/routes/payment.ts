@@ -207,7 +207,12 @@ router.post('/setup-intent/:userId', async (req, res) => {
     }
 
     // Create setup intent
-    const setupIntent = await StripeService.createSetupIntent(user.stripeCustomerId);
+    const setupIntent = await StripeService.createSetupIntent({
+      customer: user.stripeCustomerId,
+      metadata: {
+        user_id: userId
+      }
+    });
 
     logger.info('Setup intent created', { 
       userId, 
