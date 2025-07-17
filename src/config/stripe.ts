@@ -212,22 +212,6 @@ export class StripeService {
     }
   }
 
-  // Setup Intent for Payment Element
-  static async createSetupIntent(customerId: string): Promise<Stripe.SetupIntent> {
-    try {
-      const setupIntent = await stripe.setupIntents.create({
-        customer: customerId,
-        payment_method_types: ['card'],
-        usage: 'off_session', // For future payments
-      });
-      
-      logger.info('Setup intent created', { customerId, setupIntentId: setupIntent.id });
-      return setupIntent;
-    } catch (error) {
-      logger.error('Failed to create setup intent', { customerId, error });
-      throw error;
-    }
-  }
 
   /**
    * 处理支付（支持组织级支付）

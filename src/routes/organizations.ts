@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 router.get('/', async (req, res) => {
   try {
     const organizations = await prisma.organizationBalanceConfig.findMany({
-      orderBy: { createdAt: 'desc' }
+      orderBy: { created_at: 'desc' }
     });
 
     res.json({
@@ -29,8 +29,8 @@ router.get('/', async (req, res) => {
         has_payment_method: !!org.default_payment_method_id,
         max_daily_recharges: org.max_daily_recharges,
         minimum_recharge_amount: org.minimum_recharge_amount,
-        created_at: org.createdAt,
-        updated_at: org.updatedAt
+        created_at: org.created_at,
+        updated_at: org.updated_at
       }))
     });
   } catch (error: any) {
@@ -73,8 +73,8 @@ router.get('/:organizationId', async (req, res) => {
         default_payment_method_id: organization.default_payment_method_id,
         max_daily_recharges: organization.max_daily_recharges,
         minimum_recharge_amount: organization.minimum_recharge_amount,
-        created_at: organization.createdAt,
-        updated_at: organization.updatedAt
+        created_at: organization.created_at,
+        updated_at: organization.updated_at
       }
     });
   } catch (error: any) {
@@ -217,7 +217,7 @@ router.post('/:organizationId/sync', async (req, res) => {
 
       // 更新配额
       const newQuota = Math.max(100, Number(organization.target_balance));
-      await kmsClient.updateOrganization(kmsOrg.id, { quota: newQuota });
+      await kmsClient.updateOrganizationQuota(kmsOrg.id, newQuota);
 
       logger.info('组织配额同步成功', {
         c_organization_id: organizationId,
