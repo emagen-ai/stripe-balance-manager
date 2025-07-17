@@ -353,6 +353,7 @@
     <script>
         const API_BASE = window.location.origin;
         const KMS_BASE = 'http://172.171.97.248:3090';
+        const KMS_PROXY_BASE = window.location.origin + '/api/kms'; // 备用代理方案
         
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
@@ -380,9 +381,10 @@
                 
                 // 检查KMS连接
                 try {
-                    const kmsResponse = await fetch(`${KMS_BASE}/organizations`);
-                    updateStatus('kms-status', kmsResponse.ok ? '连接正常' : '连接失败', 
-                               kmsResponse.ok ? 'success' : 'error');
+                    const kmsResponse = await fetch(`${KMS_PROXY_BASE}/health`);
+                    const kmsData = await kmsResponse.json();
+                    updateStatus('kms-status', kmsData.healthy ? '连接正常' : '连接失败', 
+                               kmsData.healthy ? 'success' : 'error');
                 } catch (e) {
                     updateStatus('kms-status', '连接失败', 'error');
                 }
@@ -417,13 +419,14 @@
         // 加载KMS数据
         async function loadKMSData() {
             try {
-                const response = await fetch(`${KMS_BASE}/organizations`);
+                // 优先使用代理方案，避免CORS和Mixed Content问题
+                const response = await fetch(`${KMS_PROXY_BASE}/organizations`);
                 const data = await response.json();
                 
                 displayKMSData(data);
             } catch (error) {
                 console.error('加载KMS数据失败:', error);
-                document.getElementById('kms-data').innerHTML = '<div class="status-error">加载失败</div>';
+                document.getElementById('kms-data').innerHTML = '<div class="status-error">加载失败: ' + error.message + '</div>';
             }
         }
         

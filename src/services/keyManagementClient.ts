@@ -35,7 +35,7 @@ export class KeyManagementClient {
   private baseUrl: string;
   private timeout: number;
 
-  constructor(baseUrl: string = 'http://172.171.97.248:3090', timeout: number = 10000) {
+  constructor(baseUrl: string = process.env.KMS_BASE_URL || 'http://172.171.97.248:3090', timeout: number = 10000) {
     this.baseUrl = baseUrl;
     this.timeout = timeout;
   }
