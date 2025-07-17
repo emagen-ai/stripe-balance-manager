@@ -13,6 +13,7 @@ import { AutoRechargeScheduler } from './scheduler/AutoRechargeScheduler';
 import balanceRoutes from './routes/balance';
 import paymentRoutes from './routes/payment';
 import webhookRoutes from './routes/webhooks';
+import organizationRoutes from './routes/organizations';
 import { requestLogger, authenticateUser } from './middleware/security';
 
 console.log('✅ Dependencies loaded');
@@ -26,6 +27,7 @@ app.use(requestLogger);
 // Add routes
 app.use('/api/balance', authenticateUser, balanceRoutes);
 app.use('/api/payment', authenticateUser, paymentRoutes);
+app.use('/api/organizations', organizationRoutes); // 组织管理端点
 app.use('/webhooks', webhookRoutes); // Webhook端点不需要认证
 
 // Serve static files for payment setup page

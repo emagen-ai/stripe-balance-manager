@@ -127,6 +127,60 @@ export class StripeService {
     }
   }
 
+  static async createCustomer(params: {
+    email?: string;
+    name?: string;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Customer> {
+    try {
+      const customer = await stripe.customers.create({
+        email: params.email,
+        name: params.name,
+        metadata: params.metadata
+      });
+      
+      logger.info('Customer created', { customerId: customer.id });
+      return customer;
+    } catch (error) {
+      logger.error('Failed to create customer', { params, error });
+      throw error;
+    }
+  }
+
+  static async createSetupIntent(params: {
+    customer: string;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.SetupIntent> {
+    try {
+      const setupIntent = await stripe.setupIntents.create({
+        customer: params.customer,
+        metadata: params.metadata,
+        payment_method_types: ['card'],
+        usage: 'off_session'
+      });
+      
+      logger.info('Setup intent created', { setupIntentId: setupIntent.id, customerId: params.customer });
+      return setupIntent;
+    } catch (error) {
+      logger.error('Failed to create setup intent', { params, error });
+      throw error;
+    }
+  }
+
+  static async listPaymentMethods(customerId: string): Promise<Stripe.PaymentMethod[]> {
+    try {
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: customerId,
+        type: 'card'
+      });
+      
+      return paymentMethods.data;
+    } catch (error) {
+      logger.error('Failed to list payment methods', { customerId, error });
+      throw error;
+    }
+  }
+
   static async setDefaultPaymentMethod(customerId: string, paymentMethodId: string): Promise<void> {
     try {
       await stripe.customers.update(customerId, {

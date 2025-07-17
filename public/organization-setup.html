@@ -850,9 +850,23 @@
         // 加载已保存的配置
         async function loadSavedConfiguration(organizationId) {
             try {
-                // 这里可以调用API获取已保存的配置
-                // 暂时使用默认值
-                showAlert('success', '组织配置已加载');
+                const response = await fetch(`${API_BASE}/api/organizations/${organizationId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        const org = data.organization;
+                        document.getElementById('min-balance').value = org.minimum_balance;
+                        document.getElementById('target-balance').value = org.target_balance;
+                        document.getElementById('min-recharge').value = org.minimum_recharge_amount;
+                        document.getElementById('daily-limit').value = org.max_daily_recharges;
+                        document.getElementById('auto-recharge').checked = org.auto_recharge_enabled;
+                        
+                        // 更新支付状态
+                        updatePaymentStatus(org);
+                        
+                        showAlert('success', '组织配置已加载');
+                    }
+                }
             } catch (error) {
                 console.error('加载配置失败:', error);
                 showAlert('warning', '使用默认配置');
@@ -878,17 +892,21 @@
                     auto_recharge_enabled: document.getElementById('auto-recharge').checked
                 };
                 
-                // 这里调用API保存配置
-                // const response = await fetch(`${API_BASE}/api/organizations/config`, {
-                //     method: 'POST',
-                //     headers: { 'Content-Type': 'application/json' },
-                //     body: JSON.stringify(config)
-                // });
+                const response = await fetch(`${API_BASE}/api/organizations`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
                 
-                showAlert('success', '组织配置已保存');
+                const data = await response.json();
+                if (data.success) {
+                    showAlert('success', '组织配置已保存');
+                } else {
+                    throw new Error(data.error || '保存失败');
+                }
             } catch (error) {
                 console.error('保存配置失败:', error);
-                showAlert('error', '保存配置失败');
+                showAlert('error', `保存配置失败: ${error.message}`);
             } finally {
                 showLoading(false);
             }
@@ -903,30 +921,71 @@
             
             showLoading(true);
             try {
-                // 计算新的配额
-                const targetBalance = parseFloat(document.getElementById('target-balance').value);
-                const updateData = {
-                    quota: Math.max(100, targetBalance)
-                };
-                
-                const response = await fetch(`${KMS_BASE}/organizations/${currentOrganization.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updateData)
+                const response = await fetch(`${API_BASE}/api/organizations/${currentOrganization.c_organization_id}/sync`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
                 });
                 
-                if (response.ok) {
-                    showAlert('success', '组织配额已同步到KMS');
+                const data = await response.json();
+                if (data.success) {
+                    showAlert('success', `组织配额已同步: ${data.old_quota} → ${data.new_quota}`);
                     // 刷新组织信息
                     loadKMSOrganizations();
                 } else {
-                    throw new Error('同步失败');
+                    throw new Error(data.error || '同步失败');
                 }
             } catch (error) {
                 console.error('同步失败:', error);
-                showAlert('error', '同步到KMS失败');
+                showAlert('error', `同步到KMS失败: ${error.message}`);
             } finally {
                 showLoading(false);
+            }
+        }
+        
+        // 更新支付状态
+        function updatePaymentStatus(org) {
+            const statusContent = document.getElementById('payment-status-content');
+            const stripeCustomerInput = document.getElementById('stripe-customer');
+            
+            if (org.stripe_customer_id) {
+                stripeCustomerInput.value = org.stripe_customer_id;
+                statusContent.innerHTML = `
+                    <div class="card-value" style="color: var(--success);">已配置</div>
+                    <div class="card-label">Stripe Customer: ${org.stripe_customer_id}</div>
+                    <div class="card-label">支付方式: ${org.has_payment_method ? '已设置' : '未设置'}</div>
+                `;
+                
+                // 加载支付方式
+                loadPaymentMethods(org.c_organization_id);
+            } else {
+                statusContent.innerHTML = `
+                    <div class="card-value" style="color: var(--warning);">未配置</div>
+                    <div class="card-label">需要配置Stripe客户和支付方式</div>
+                `;
+            }
+        }
+        
+        // 加载支付方式
+        async function loadPaymentMethods(organizationId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/organizations/${organizationId}/payment-methods`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const methodsContainer = document.getElementById('payment-methods');
+                    
+                    if (data.payment_methods.length === 0) {
+                        methodsContainer.innerHTML = '<div style="color: var(--text-muted); text-align: center;">未配置支付方式</div>';
+                    } else {
+                        methodsContainer.innerHTML = data.payment_methods.map(pm => `
+                            <div style="padding: 8px; margin: 4px 0; background: var(--bg-primary); border-radius: 4px; font-size: 12px;">
+                                💳 ${pm.card.brand.toUpperCase()} **** ${pm.card.last4} (${pm.card.exp_month}/${pm.card.exp_year})
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (error) {
+                console.error('加载支付方式失败:', error);
             }
         }
         
@@ -950,9 +1009,19 @@
         async function initializePaymentElement() {
             showLoading(true);
             try {
-                // 这里需要调用后端API创建setup intent
-                // 暂时使用模拟数据
+                // 创建Setup Intent
+                const response = await fetch(`${API_BASE}/api/organizations/${currentOrganization.c_organization_id}/setup-intent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                if (!data.success) {
+                    throw new Error(data.error || '创建Setup Intent失败');
+                }
+                
                 elements = stripe.elements({
+                    clientSecret: data.client_secret,
                     appearance: {
                         theme: 'night',
                         variables: {
@@ -970,7 +1039,7 @@
                 showAlert('success', '支付元素已初始化');
             } catch (error) {
                 console.error('支付元素初始化失败:', error);
-                showAlert('error', '支付元素初始化失败');
+                showAlert('error', `支付元素初始化失败: ${error.message}`);
             } finally {
                 showLoading(false);
             }
