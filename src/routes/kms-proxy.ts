@@ -34,8 +34,9 @@ router.get('/organizations/:id', async (req, res) => {
 // 健康检查
 router.get('/health', async (req, res) => {
   try {
-    const isHealthy = await kmsClient.healthCheck();
-    res.json({ healthy: isHealthy });
+    // 通过尝试获取组织列表来检查KMS健康状态
+    const organizations = await kmsClient.listOrganizations();
+    res.json({ healthy: true, organizations_count: organizations.length });
   } catch (error: any) {
     logger.error('KMS代理：健康检查失败', { error: error.message });
     res.status(500).json({ healthy: false, error: error.message });
