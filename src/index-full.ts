@@ -31,6 +31,11 @@ app.use('/webhooks', webhookRoutes); // Webhook端点不需要认证
 // Serve static files for payment setup page
 app.use(express.static('public'));
 
+// Root route for verification panel
+app.get('/', (req, res) => {
+  res.sendFile('index.html', { root: 'public' });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
