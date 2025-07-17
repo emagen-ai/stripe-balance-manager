@@ -8,83 +8,124 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  stripeCustomerId String @unique
+  id               String           @id @default(cuid())
+  email            String           @unique
+  stripeCustomerId String           @unique
   
-  balanceConfig BalanceConfig?
-  rechargeHistory RechargeRecord[]
+  // 组织关联字段
+  c_organization_id String?
+  litellm_team_id   String?
   
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  balanceConfig    BalanceConfig?
+  rechargeHistory  RechargeRecord[]
+  organization     OrganizationBalanceConfig? @relation(fields: [c_organization_id], references: [c_organization_id])
+
   @@map("users")
 }
 
 model BalanceConfig {
-  id       String @id @default(cuid())
-  userId   String @unique
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // 余额阈值设置
-  minimumBalance    Decimal @db.Decimal(10, 2) // 余额下限
-  targetBalance     Decimal @db.Decimal(10, 2) // 目标补充值
-  
-  // 自动充值设置
-  autoRechargeEnabled Boolean @default(true)
-  defaultPaymentMethodId String? // Stripe payment method ID
-  
-  // 限制设置
-  maxDailyRecharges   Int @default(3)
-  maxRechargeAmount   Decimal @db.Decimal(10, 2) @default(10000.00)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  minimumBalance         Decimal  @db.Decimal(10, 2)
+  targetBalance          Decimal  @db.Decimal(10, 2)
+  autoRechargeEnabled    Boolean  @default(true)
+  defaultPaymentMethodId String?
+  maxDailyRecharges      Int      @default(3)
+  maxRechargeAmount      Decimal  @default(10000.00) @db.Decimal(10, 2)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("balance_configs")
 }
 
 model RechargeRecord {
-  id       String @id @default(cuid())
-  userId   String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String         @id @default(cuid())
+  userId                String?        // 改为可选，支持组织级充值
+  user                  User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // 充值信息
-  amount           Decimal @db.Decimal(10, 2) // 充值金额
-  fee              Decimal @db.Decimal(10, 2) // 手续费
-  totalCharged     Decimal @db.Decimal(10, 2) // 实际扣费总额
+  // 组织关联字段
+  c_organization_id     String?
+  organization          OrganizationBalanceConfig? @relation(fields: [c_organization_id], references: [c_organization_id])
   
-  // 余额信息
-  balanceBefore    Decimal @db.Decimal(10, 2) // 充值前余额
-  balanceAfter     Decimal @db.Decimal(10, 2) // 充值后余额
+  amount                Decimal        @db.Decimal(10, 2)
+  fee                   Decimal        @db.Decimal(10, 2)
+  totalCharged          Decimal        @db.Decimal(10, 2)
+  balanceBefore         Decimal        @db.Decimal(10, 2)
+  balanceAfter          Decimal        @db.Decimal(10, 2)
+  stripePaymentIntentId String         @unique
+  stripeStatus          String
+  status                RechargeStatus @default(PENDING)
+  isAutomatic           Boolean        @default(true)
   
-  // Stripe 信息
-  stripePaymentIntentId String @unique
-  stripeStatus         String // succeeded, failed, pending
+  // Webhook相关字段
+  triggeredBy           String         @default("manual") // manual, webhook, scheduled
+  triggered_by_webhook  Boolean        @default(false)
+  webhook_event_id      String?
   
-  // 状态
-  status    RechargeStatus @default(PENDING)
-  isAutomatic Boolean @default(true) // 是否为自动充值
-  
-  failureReason String?
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
+  failureReason         String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
   @@map("recharge_records")
 }
 
 model DailyRechargeLimit {
-  id       String @id @default(cuid())
-  userId   String
-  date     DateTime @db.Date
-  count    Int @default(0)
-  
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  count     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@unique([userId, date])
   @@map("daily_recharge_limits")
+}
+
+// 组织级余额配置模型
+model OrganizationBalanceConfig {
+  id                      String   @id @default(cuid())
+  c_organization_id       String   @unique
+  stripe_customer_id      String?  @unique
+  litellm_team_id         String?  @unique
+  
+  // 余额阈值设置
+  minimum_balance         Decimal  @default(100) @db.Decimal(10, 2)
+  target_balance          Decimal  @default(1000) @db.Decimal(10, 2)
+  
+  // 自动充值设置
+  auto_recharge_enabled   Boolean  @default(true)
+  default_payment_method_id String?
+  max_daily_recharges     Int      @default(5)
+  minimum_recharge_amount Decimal  @default(100) @db.Decimal(10, 2)
+  
+  // 关联关系
+  users           User[]
+  rechargeRecords RechargeRecord[]
+  
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  @@map("organization_balance_configs")
+}
+
+// Webhook事件记录模型
+model WebhookEvent {
+  id            String   @id @default(cuid())
+  event_type    String   // limit_exceeded, payment_success, etc.
+  team_id       String
+  organization_id String?
+  payload       Json     // 完整的webhook payload
+  processed     Boolean  @default(false)
+  success       Boolean  @default(false)
+  error_message String?
+  response_data Json?
+  
+  created_at DateTime @default(now())
+  
+  @@map("webhook_events")
 }
 
 enum RechargeStatus {

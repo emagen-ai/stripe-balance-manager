@@ -11,6 +11,7 @@ import { DatabaseManager } from './config/database';
 import { logger } from './config/logger';
 import { AutoRechargeScheduler } from './scheduler/AutoRechargeScheduler';
 import balanceRoutes from './routes/balance';
+import webhookRoutes from './routes/webhooks';
 import { requestLogger, authenticateUser } from './middleware/security';
 
 console.log('✅ Dependencies loaded');
@@ -22,6 +23,7 @@ app.use(express.json());
 app.use(requestLogger);
 
 app.use('/api/balance', authenticateUser, balanceRoutes);
+app.use('/webhooks', webhookRoutes); // Webhook端点不需要认证
 
 app.get('/health', (req, res) => {
   res.json({ 

@@ -174,4 +174,86 @@ export class StripeService {
       throw error;
     }
   }
+
+  /**
+   * 处理支付（支持组织级支付）
+   */
+  static async processPayment(params: {
+    customerId: string;
+    amount: number;
+    paymentMethodId: string;
+    metadata?: Record<string, any>;
+    description?: string;
+  }): Promise<{
+    success: boolean;
+    paymentIntentId?: string;
+    status?: string;
+    fee: number;
+    totalAmount: number;
+    error?: string;
+  }> {
+    try {
+      const { customerId, amount, paymentMethodId, metadata, description } = params;
+      
+      // 计算手续费
+      const fee = this.calculateFee(amount);
+      const totalAmount = amount + fee;
+
+      logger.info('开始处理支付', { 
+        customerId,
+        amount,
+        fee,
+        totalAmount,
+        paymentMethodId,
+        metadata
+      });
+
+      // 创建并确认支付意图
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(totalAmount * 100), // 转换为分
+        currency: 'cny',
+        customer: customerId,
+        payment_method: paymentMethodId,
+        confirmation_method: 'automatic',
+        confirm: true,
+        description: description || 'Automatic organization recharge',
+        metadata: {
+          recharge_amount: amount.toString(),
+          fee_amount: fee.toString(),
+          total_amount: totalAmount.toString(),
+          ...metadata
+        },
+      });
+
+      logger.info('支付意图创建并确认', { 
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status,
+        amount: totalAmount
+      });
+
+      return {
+        success: paymentIntent.status === 'succeeded',
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status,
+        fee,
+        totalAmount,
+      };
+
+    } catch (error: any) {
+      logger.error('支付处理失败', { 
+        customerId: params.customerId,
+        amount: params.amount,
+        error: error.message
+      });
+
+      return {
+        success: false,
+        fee: this.calculateFee(params.amount),
+        totalAmount: params.amount + this.calculateFee(params.amount),
+        error: error.message
+      };
+    }
+  }
 }
+
+export const stripeService = new StripeService();
