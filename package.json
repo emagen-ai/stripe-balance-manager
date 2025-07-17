@@ -9,6 +9,7 @@
     "start:prod": "node dist/index.js",
     "dev": "nodemon src/index.ts",
     "build": "tsc",
+    "postbuild": "npx prisma migrate deploy && npx prisma generate",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "typecheck": "tsc --noEmit"
