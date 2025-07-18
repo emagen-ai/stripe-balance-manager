@@ -716,6 +716,7 @@
         // API配置
         const API_BASE = window.location.origin;
         const KMS_BASE = 'http://172.171.97.248:3090';
+        const KMS_PROXY_BASE = API_BASE + '/api/kms'; // 使用代理访问KMS
         
         // 全局状态
         let currentOrganization = null;
@@ -774,7 +775,7 @@
         async function loadKMSOrganizations() {
             showLoading(true);
             try {
-                const response = await fetch(`${KMS_BASE}/organizations`);
+                const response = await fetch(`${KMS_PROXY_BASE}/organizations`);
                 const data = await response.json();
                 
                 kmsOrganizations = data;
@@ -1228,7 +1229,7 @@
         async function testKMSConnection() {
             showLoading(true);
             try {
-                const response = await fetch(`${KMS_BASE}/organizations`);
+                const response = await fetch(`${KMS_PROXY_BASE}/organizations`);
                 const data = await response.json();
                 
                 document.getElementById('test-results').style.display = 'block';
