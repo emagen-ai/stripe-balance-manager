@@ -607,15 +607,21 @@
                         <button class="btn btn-secondary" onclick="openStripePortal()" title="打开Stripe官方管理界面（需要预先配置）">
                             🏛️ 打开Stripe Portal
                         </button>
+                        <button class="btn btn-secondary" onclick="refreshPaymentStatus()" title="刷新支付方式状态">
+                            🔄 刷新状态
+                        </button>
                     </div>
                     
                     <div style="margin-top: 12px; padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 8px; font-size: 13px; color: var(--text-muted);">
                         💡 <strong>支付配置流程：</strong><br>
                         1️⃣ <strong>选择组织</strong> → 系统自动创建Stripe客户<br>
-                        2️⃣ <strong>配置支付方式</strong> → 选择内嵌设置或Stripe Portal<br>
-                        3️⃣ <strong>完成设置</strong> → 启用自动充值功能<br><br>
+                        2️⃣ <strong>配置支付方式</strong> → 填写并保存信用卡信息<br>
+                        3️⃣ <strong>完成设置</strong> → 点击"刷新状态"确认配置成功<br>
+                        4️⃣ <strong>启用自动充值</strong> → 系统将使用该支付方式进行自动充值<br><br>
                         🔧 <strong>配置Stripe支付</strong>：内嵌式，快速便捷<br>
-                        🏛️ <strong>Stripe Portal</strong>：官方界面，功能完整
+                        🏛️ <strong>Stripe Portal</strong>：官方界面，功能完整<br>
+                        🔄 <strong>刷新状态</strong>：检查支付方式是否成功保存<br><br>
+                        ⚠️ <strong>重要提示</strong>：如果显示"Payment Method: null"错误，说明支付方式未成功保存，请重新配置支付信息。
                     </div>
                     
                     <div id="payment-element-container" style="display: none;">
@@ -1089,6 +1095,26 @@
             }
         }
         
+        // 刷新支付状态
+        async function refreshPaymentStatus() {
+            if (!currentOrganization) {
+                showAlert('error', '请先选择组织');
+                return;
+            }
+            
+            showLoading(true);
+            try {
+                // 重新加载组织配置
+                await loadSavedConfiguration(currentOrganization.c_organization_id);
+                showAlert('success', '支付状态已刷新');
+            } catch (error) {
+                console.error('刷新支付状态失败:', error);
+                showAlert('error', '刷新支付状态失败');
+            } finally {
+                showLoading(false);
+            }
+        }
+
         // 保存支付方式
         async function savePaymentMethod() {
             if (!paymentElement) {
@@ -1099,11 +1125,28 @@
             showLoading(true);
             try {
                 // 这里需要调用Stripe API保存支付方式
-                showAlert('success', '支付方式已保存');
-                cancelPaymentSetup();
+                const {error} = await stripe.confirmSetup({
+                    elements,
+                    confirmParams: {
+                        return_url: window.location.href
+                    }
+                });
+                
+                if (error) {
+                    throw new Error(error.message);
+                }
+                
+                showAlert('success', '支付方式已保存，正在刷新状态...');
+                
+                // 短暂延迟后刷新状态
+                setTimeout(() => {
+                    refreshPaymentStatus();
+                    cancelPaymentSetup();
+                }, 2000);
+                
             } catch (error) {
                 console.error('保存支付方式失败:', error);
-                showAlert('error', '保存支付方式失败');
+                showAlert('error', `保存支付方式失败: ${error.message}`);
             } finally {
                 showLoading(false);
             }
