@@ -272,13 +272,8 @@ export class StripeService {
         currency: 'cny',
         customer: customerId,
         payment_method: paymentMethodId,
-        confirmation_method: 'automatic',
         confirm: true,
         description: description || 'Automatic organization recharge',
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: 'never'
-        },
         metadata: {
           recharge_amount: amount.toString(),
           fee_amount: fee.toString(),

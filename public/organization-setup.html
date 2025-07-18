@@ -974,13 +974,8 @@
                     <div class="card-label">支付方式: ${org.has_payment_method ? '已设置' : '未设置'}</div>
                 `;
                 
-                // 加载支付方式
-                loadPaymentMethods(org.c_organization_id);
-                
-                // 如果没有设置默认支付方式，尝试自动设置
-                if (!org.has_payment_method) {
-                    autoSetDefaultPaymentMethod(org.c_organization_id);
-                }
+                // 只加载支付方式，不自动设置
+                loadPaymentMethods(org.c_organization_id, false);
             } else {
                 statusContent.innerHTML = `
                     <div class="card-value" style="color: var(--warning);">未配置</div>
@@ -1033,7 +1028,7 @@
         }
 
         // 加载支付方式
-        async function loadPaymentMethods(organizationId) {
+        async function loadPaymentMethods(organizationId, autoSet = true) {
             try {
                 const response = await fetch(`${API_BASE}/api/organizations/${organizationId}/payment-methods`);
                 const data = await response.json();
@@ -1044,8 +1039,9 @@
                     if (data.payment_methods.length === 0) {
                         methodsContainer.innerHTML = '<div style="color: var(--text-muted); text-align: center;">未配置支付方式</div>';
                         
-                        // 只在确实没有支付方式时才尝试自动设置
-                        if (currentOrganization && !currentOrganization.has_payment_method) {
+                        // 只在手动刷新时才尝试自动设置
+                        if (autoSet && currentOrganization && !currentOrganization.has_payment_method) {
+                            console.log('尝试自动设置默认支付方式...');
                             setTimeout(() => autoSetDefaultPaymentMethod(organizationId), 1000);
                         }
                     } else {
@@ -1055,8 +1051,10 @@
                             </div>
                         `).join('');
                         
-                        // 更新支付状态显示
-                        updatePaymentStatusDisplay(true, data.payment_methods[0]?.card);
+                        // 只在不是自动调用时更新支付状态显示
+                        if (autoSet) {
+                            updatePaymentStatusDisplay(true, data.payment_methods[0]?.card);
+                        }
                     }
                 }
             } catch (error) {
