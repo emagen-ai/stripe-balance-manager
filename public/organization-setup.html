@@ -1002,14 +1002,36 @@
                     console.log('自动设置默认支付方式成功:', data);
                     showAlert('success', `自动设置默认支付方式: ${data.card_info?.brand} **** ${data.card_info?.last4}`);
                     
-                    // 重新加载组织配置以更新状态
-                    loadSavedConfiguration(organizationId);
+                    // 只更新支付状态，不重新加载整个配置
+                    updatePaymentStatusDisplay(true, data.card_info);
+                } else if (data.success === false && data.message) {
+                    console.log('自动设置默认支付方式:', data.message);
                 }
             } catch (error) {
                 console.error('自动设置默认支付方式失败:', error);
             }
         }
         
+        // 更新支付状态显示
+        function updatePaymentStatusDisplay(hasPaymentMethod, cardInfo = null) {
+            const statusContent = document.getElementById('payment-status-content');
+            const stripeCustomerInput = document.getElementById('stripe-customer');
+            
+            if (currentOrganization && currentOrganization.stripe_customer_id) {
+                stripeCustomerInput.value = currentOrganization.stripe_customer_id;
+                
+                const methodStatus = hasPaymentMethod ? '已设置' : '未设置';
+                const statusColor = hasPaymentMethod ? 'var(--success)' : 'var(--warning)';
+                
+                statusContent.innerHTML = `
+                    <div class="card-value" style="color: ${statusColor};">已配置</div>
+                    <div class="card-label">Stripe Customer: ${currentOrganization.stripe_customer_id}</div>
+                    <div class="card-label">支付方式: ${methodStatus}</div>
+                    ${cardInfo ? `<div class="card-label">默认卡片: ${cardInfo.brand} **** ${cardInfo.last4}</div>` : ''}
+                `;
+            }
+        }
+
         // 加载支付方式
         async function loadPaymentMethods(organizationId) {
             try {
@@ -1021,6 +1043,11 @@
                     
                     if (data.payment_methods.length === 0) {
                         methodsContainer.innerHTML = '<div style="color: var(--text-muted); text-align: center;">未配置支付方式</div>';
+                        
+                        // 只在确实没有支付方式时才尝试自动设置
+                        if (currentOrganization && !currentOrganization.has_payment_method) {
+                            setTimeout(() => autoSetDefaultPaymentMethod(organizationId), 1000);
+                        }
                     } else {
                         methodsContainer.innerHTML = data.payment_methods.map(pm => `
                             <div style="padding: 8px; margin: 4px 0; background: var(--bg-primary); border-radius: 4px; font-size: 12px;">
@@ -1028,10 +1055,8 @@
                             </div>
                         `).join('');
                         
-                        // 如果有支付方式但当前组织没有默认支付方式，尝试自动设置
-                        if (data.payment_methods.length > 0 && currentOrganization) {
-                            autoSetDefaultPaymentMethod(organizationId);
-                        }
+                        // 更新支付状态显示
+                        updatePaymentStatusDisplay(true, data.payment_methods[0]?.card);
                     }
                 }
             } catch (error) {
