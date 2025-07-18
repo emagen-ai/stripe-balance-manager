@@ -27,6 +27,7 @@ router.get('/', async (req, res) => {
         auto_recharge_enabled: org.auto_recharge_enabled,
         stripe_customer_id: org.stripe_customer_id,
         has_payment_method: !!org.default_payment_method_id,
+        default_payment_method_id: org.default_payment_method_id,
         max_daily_recharges: org.max_daily_recharges,
         minimum_recharge_amount: org.minimum_recharge_amount,
         created_at: org.created_at,
@@ -472,6 +473,166 @@ router.delete('/:organizationId', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to delete organization configuration'
+    });
+  }
+});
+
+/**
+ * 设置组织的默认支付方式
+ */
+router.post('/:organizationId/default-payment-method', async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    const { paymentMethodId } = req.body;
+    
+    if (!paymentMethodId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment method ID is required'
+      });
+    }
+
+    const organization = await prisma.organizationBalanceConfig.findUnique({
+      where: { c_organization_id: organizationId }
+    });
+
+    if (!organization || !organization.stripe_customer_id) {
+      return res.status(404).json({
+        success: false,
+        error: 'Organization not found or no Stripe customer configured'
+      });
+    }
+
+    try {
+      // 验证支付方式是否属于该客户
+      const paymentMethod = await StripeService.getPaymentMethod(paymentMethodId);
+      if (paymentMethod.customer !== organization.stripe_customer_id) {
+        return res.status(400).json({
+          success: false,
+          error: 'Payment method does not belong to this customer'
+        });
+      }
+
+      // 设置为Stripe中的默认支付方式
+      await StripeService.setDefaultPaymentMethod(organization.stripe_customer_id, paymentMethodId);
+
+      // 更新数据库中的默认支付方式
+      await prisma.organizationBalanceConfig.update({
+        where: { c_organization_id: organizationId },
+        data: { 
+          default_payment_method_id: paymentMethodId 
+        }
+      });
+
+      logger.info('默认支付方式已设置', {
+        c_organization_id: organizationId,
+        stripe_customer_id: organization.stripe_customer_id,
+        payment_method_id: paymentMethodId
+      });
+
+      res.json({
+        success: true,
+        message: 'Default payment method set successfully',
+        payment_method_id: paymentMethodId
+      });
+    } catch (stripeError: any) {
+      logger.error('设置默认支付方式失败', { error: stripeError.message, organizationId, paymentMethodId });
+      res.status(500).json({
+        success: false,
+        error: `Failed to set default payment method: ${stripeError.message}`
+      });
+    }
+  } catch (error: any) {
+    logger.error('设置默认支付方式失败', { error: error.message, organizationId: req.params.organizationId });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to set default payment method'
+    });
+  }
+});
+
+/**
+ * 自动检测并设置默认支付方式（如果还没有设置）
+ */
+router.post('/:organizationId/auto-set-payment-method', async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    
+    const organization = await prisma.organizationBalanceConfig.findUnique({
+      where: { c_organization_id: organizationId }
+    });
+
+    if (!organization || !organization.stripe_customer_id) {
+      return res.status(404).json({
+        success: false,
+        error: 'Organization not found or no Stripe customer configured'
+      });
+    }
+
+    // 如果已经有默认支付方式，直接返回
+    if (organization.default_payment_method_id) {
+      return res.json({
+        success: true,
+        message: 'Default payment method already set',
+        payment_method_id: organization.default_payment_method_id
+      });
+    }
+
+    try {
+      // 获取客户的所有支付方式
+      const paymentMethods = await StripeService.listPaymentMethods(organization.stripe_customer_id);
+      
+      if (paymentMethods.length === 0) {
+        return res.json({
+          success: false,
+          message: 'No payment methods found for this customer'
+        });
+      }
+
+      // 使用第一个支付方式作为默认方式
+      const defaultPaymentMethod = paymentMethods[0];
+
+      // 设置为Stripe中的默认支付方式
+      await StripeService.setDefaultPaymentMethod(organization.stripe_customer_id, defaultPaymentMethod.id);
+
+      // 更新数据库中的默认支付方式
+      await prisma.organizationBalanceConfig.update({
+        where: { c_organization_id: organizationId },
+        data: { 
+          default_payment_method_id: defaultPaymentMethod.id 
+        }
+      });
+
+      logger.info('自动设置默认支付方式', {
+        c_organization_id: organizationId,
+        stripe_customer_id: organization.stripe_customer_id,
+        payment_method_id: defaultPaymentMethod.id,
+        card_last4: defaultPaymentMethod.card?.last4
+      });
+
+      res.json({
+        success: true,
+        message: 'Default payment method set automatically',
+        payment_method_id: defaultPaymentMethod.id,
+        card_info: defaultPaymentMethod.card ? {
+          brand: defaultPaymentMethod.card.brand,
+          last4: defaultPaymentMethod.card.last4,
+          exp_month: defaultPaymentMethod.card.exp_month,
+          exp_year: defaultPaymentMethod.card.exp_year
+        } : null
+      });
+    } catch (stripeError: any) {
+      logger.error('自动设置默认支付方式失败', { error: stripeError.message, organizationId });
+      res.status(500).json({
+        success: false,
+        error: `Failed to auto-set payment method: ${stripeError.message}`
+      });
+    }
+  } catch (error: any) {
+    logger.error('自动设置默认支付方式失败', { error: error.message, organizationId: req.params.organizationId });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to auto-set payment method'
     });
   }
 });

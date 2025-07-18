@@ -970,11 +970,37 @@
                 
                 // 加载支付方式
                 loadPaymentMethods(org.c_organization_id);
+                
+                // 如果没有设置默认支付方式，尝试自动设置
+                if (!org.has_payment_method) {
+                    autoSetDefaultPaymentMethod(org.c_organization_id);
+                }
             } else {
                 statusContent.innerHTML = `
                     <div class="card-value" style="color: var(--warning);">未配置</div>
                     <div class="card-label">需要配置Stripe客户和支付方式</div>
                 `;
+            }
+        }
+        
+        // 自动设置默认支付方式
+        async function autoSetDefaultPaymentMethod(organizationId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/organizations/${organizationId}/auto-set-payment-method`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                if (data.success && data.payment_method_id) {
+                    console.log('自动设置默认支付方式成功:', data);
+                    showAlert('success', `自动设置默认支付方式: ${data.card_info?.brand} **** ${data.card_info?.last4}`);
+                    
+                    // 重新加载组织配置以更新状态
+                    loadSavedConfiguration(organizationId);
+                }
+            } catch (error) {
+                console.error('自动设置默认支付方式失败:', error);
             }
         }
         
@@ -995,6 +1021,11 @@
                                 💳 ${pm.card.brand.toUpperCase()} **** ${pm.card.last4} (${pm.card.exp_month}/${pm.card.exp_year})
                             </div>
                         `).join('');
+                        
+                        // 如果有支付方式但当前组织没有默认支付方式，尝试自动设置
+                        if (data.payment_methods.length > 0 && currentOrganization) {
+                            autoSetDefaultPaymentMethod(organizationId);
+                        }
                     }
                 }
             } catch (error) {
