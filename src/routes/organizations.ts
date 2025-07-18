@@ -476,4 +476,50 @@ router.delete('/:organizationId', async (req, res) => {
   }
 });
 
+/**
+ * 创建组织的Stripe Portal会话
+ */
+router.post('/:organizationId/portal', async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    const { returnUrl } = req.body;
+    
+    const organization = await prisma.organizationBalanceConfig.findUnique({
+      where: { c_organization_id: organizationId }
+    });
+
+    if (!organization || !organization.stripe_customer_id) {
+      return res.status(404).json({
+        success: false,
+        error: 'Organization not found or no Stripe customer configured'
+      });
+    }
+
+    try {
+      // 创建Stripe Customer Portal会话
+      const session = await StripeService.createPortalSession(
+        organization.stripe_customer_id,
+        returnUrl || `${process.env.BASE_URL || 'http://localhost:3000'}/organization-setup.html`
+      );
+
+      res.json({
+        success: true,
+        portalUrl: session.url
+      });
+    } catch (stripeError: any) {
+      logger.error('创建Portal会话失败', { error: stripeError.message, organizationId });
+      res.status(500).json({
+        success: false,
+        error: `Failed to create portal session: ${stripeError.message}`
+      });
+    }
+  } catch (error: any) {
+    logger.error('创建Portal会话失败', { error: error.message, organizationId: req.params.organizationId });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create portal session'
+    });
+  }
+});
+
 export default router;

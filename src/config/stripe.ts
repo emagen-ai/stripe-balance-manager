@@ -212,6 +212,21 @@ export class StripeService {
     }
   }
 
+  static async createPortalSession(customerId: string, returnUrl: string): Promise<{ url: string }> {
+    try {
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl,
+      });
+      
+      logger.info('Portal session created', { customerId, sessionId: session.id });
+      return { url: session.url };
+    } catch (error) {
+      logger.error('Failed to create portal session', { customerId, error });
+      throw error;
+    }
+  }
+
 
   /**
    * 处理支付（支持组织级支付）

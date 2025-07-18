@@ -1077,13 +1077,43 @@
         }
         
         // 打开Stripe Portal
-        function openStripePortal() {
+        async function openStripePortal() {
             if (!currentOrganization) {
                 showAlert('error', '请先选择组织');
                 return;
             }
             
-            showAlert('warning', 'Stripe Portal功能正在开发中');
+            if (!currentOrganization.stripe_customer_id) {
+                showAlert('error', '该组织尚未配置Stripe客户，请先创建Stripe客户');
+                return;
+            }
+            
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE}/api/organizations/${currentOrganization.c_organization_id}/portal`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        returnUrl: window.location.href
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    // 在新窗口中打开Stripe Portal
+                    window.open(data.portalUrl, '_blank');
+                    showAlert('success', 'Stripe Portal已在新窗口中打开');
+                } else {
+                    throw new Error(data.error || '创建Portal会话失败');
+                }
+            } catch (error) {
+                console.error('打开Stripe Portal失败:', error);
+                showAlert('error', `打开Portal失败: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
         }
         
         // 加载Webhook事件
