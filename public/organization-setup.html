@@ -601,9 +601,15 @@
                         <button class="btn" onclick="setupStripePayment()">
                             🔧 配置Stripe支付
                         </button>
-                        <button class="btn btn-secondary" onclick="openStripePortal()">
+                        <button class="btn btn-secondary" onclick="openStripePortal()" title="打开Stripe官方管理界面（需要预先配置）">
                             🏛️ 打开Stripe Portal
                         </button>
+                    </div>
+                    
+                    <div style="margin-top: 12px; padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 8px; font-size: 13px; color: var(--text-muted);">
+                        💡 <strong>支付方式配置说明：</strong><br>
+                        • <strong>配置Stripe支付</strong>：内嵌式支付方式设置，快速便捷<br>
+                        • <strong>Stripe Portal</strong>：官方完整管理界面，功能更丰富（需在Stripe Dashboard中预先配置）
                     </div>
                     
                     <div id="payment-element-container" style="display: none;">
@@ -1106,7 +1112,18 @@
                     window.open(data.portalUrl, '_blank');
                     showAlert('success', 'Stripe Portal已在新窗口中打开');
                 } else {
-                    throw new Error(data.error || '创建Portal会话失败');
+                    let errorMessage = data.error || '创建Portal会话失败';
+                    
+                    // 特殊处理Stripe Portal配置错误
+                    if (errorMessage.includes('configuration') || errorMessage.includes('default configuration')) {
+                        errorMessage = '❗ Stripe Customer Portal未配置。\n\n' +
+                                     '请在Stripe Dashboard中配置Customer Portal：\n' +
+                                     '1. 访问 https://dashboard.stripe.com/test/settings/billing/portal\n' +
+                                     '2. 配置并保存Customer Portal设置\n' +
+                                     '3. 然后重试此功能';
+                    }
+                    
+                    throw new Error(errorMessage);
                 }
             } catch (error) {
                 console.error('打开Stripe Portal失败:', error);
