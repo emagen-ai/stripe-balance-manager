@@ -268,8 +268,8 @@ router.post('/:organizationId/stripe-customer', async (req, res) => {
 
     let customerId = organization.stripe_customer_id;
     
-    // 如果没有Stripe客户，创建一个
-    if (!customerId) {
+    // 如果没有Stripe客户，或客户ID无效，创建一个新的
+    if (!customerId || customerId === 'cus_test123') {
       try {
         const customer = await StripeService.createCustomer({
           metadata: {
@@ -332,8 +332,8 @@ router.post('/:organizationId/setup-intent', async (req, res) => {
 
     let customerId = organization.stripe_customer_id;
     
-    // 如果没有Stripe客户，先创建一个
-    if (!customerId) {
+    // 如果没有Stripe客户，或客户ID无效，先创建一个
+    if (!customerId || customerId === 'cus_test123') {
       try {
         const customer = await StripeService.createCustomer({
           metadata: {

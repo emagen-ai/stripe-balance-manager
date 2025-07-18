@@ -134,12 +134,12 @@ export class StripeService {
   }): Promise<Stripe.Customer> {
     try {
       const customer = await stripe.customers.create({
-        email: params.email,
-        name: params.name,
+        email: params.email || `org-${Date.now()}@example.com`, // 提供默认邮箱
+        name: params.name || 'Organization Customer',
         metadata: params.metadata
       });
       
-      logger.info('Customer created', { customerId: customer.id });
+      logger.info('Customer created', { customerId: customer.id, email: customer.email });
       return customer;
     } catch (error) {
       logger.error('Failed to create customer', { params, error });
@@ -217,9 +217,10 @@ export class StripeService {
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,
         return_url: returnUrl,
+        configuration: undefined, // 使用默认配置
       });
       
-      logger.info('Portal session created', { customerId, sessionId: session.id });
+      logger.info('Portal session created', { customerId, sessionId: session.id, url: session.url });
       return { url: session.url };
     } catch (error) {
       logger.error('Failed to create portal session', { customerId, error });
