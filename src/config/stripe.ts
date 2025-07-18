@@ -155,7 +155,6 @@ export class StripeService {
       const setupIntent = await stripe.setupIntents.create({
         customer: params.customer,
         metadata: params.metadata,
-        payment_method_types: ['card'],
         usage: 'off_session',
         automatic_payment_methods: {
           enabled: true,
