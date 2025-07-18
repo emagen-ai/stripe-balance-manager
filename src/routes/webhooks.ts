@@ -11,11 +11,12 @@ const prisma = new PrismaClient();
 
 // LiteLLM Webhook负载接口
 interface LiteLLMWebhookPayload {
-  event_type: 'limit_exceeded' | 'quota_warning' | 'payment_success';
+  event_type: 'balance_low' | 'limit_exceeded' | 'quota_warning' | 'payment_success';
   team_id: string;
   organization_id?: string;
   current_usage?: number;
   current_limit?: number;
+  current_balance?: number;
   exceeded_by?: number;
   warning_threshold?: number;
   timestamp: string;
@@ -23,12 +24,12 @@ interface LiteLLMWebhookPayload {
 }
 
 /**
- * 处理LiteLLM超限通知
+ * 处理LiteLLM余额不足/超限通知
  */
 router.post('/litellm/limit-exceeded', async (req, res) => {
   const requestId = req.headers['x-request-id'] || `req_${Date.now()}`;
   
-  logger.info('接收到LiteLLM超限webhook', { 
+  logger.info('接收到LiteLLM余额/超限webhook', { 
     request_id: requestId,
     headers: req.headers,
     body: req.body
@@ -235,19 +236,49 @@ async function handleAutoRecharge(
     throw new Error(`Daily recharge limit exceeded (${todayRecharges}/${orgConfig.max_daily_recharges})`);
   }
 
-  // 2. 计算充值金额
-  const shortfall = payload.exceeded_by || 0;
+  // 2. 获取当前余额信息
+  const spendInfo = await kmsClient.getOrganizationSpend(orgConfig.c_organization_id);
+  const currentBalance = parseFloat(spendInfo.remaining);
+  const minimumBalance = Number(orgConfig.minimum_balance);
+  const targetBalance = Number(orgConfig.target_balance);
+
+  logger.info('当前余额信息', {
+    organization_id: orgConfig.c_organization_id,
+    current_balance: currentBalance,
+    minimum_balance: minimumBalance,
+    target_balance: targetBalance,
+    spend: spendInfo.spend,
+    quota: spendInfo.quota
+  });
+
+  // 3. 检查是否需要充值
+  if (currentBalance >= minimumBalance) {
+    logger.info('余额充足，无需充值', {
+      organization_id: orgConfig.c_organization_id,
+      current_balance: currentBalance,
+      minimum_balance: minimumBalance
+    });
+    
+    return {
+      action: 'no_recharge_needed',
+      current_balance: currentBalance,
+      minimum_balance: minimumBalance,
+      message: 'Balance is sufficient'
+    };
+  }
+
+  // 4. 计算充值金额
   const rechargeAmount = Math.max(
     Number(orgConfig.minimum_recharge_amount),
-    Number(orgConfig.target_balance) - (payload.current_limit || 0)
+    targetBalance - currentBalance
   );
 
   logger.info('计算充值金额', {
     organization_id: orgConfig.c_organization_id,
-    shortfall,
+    current_balance: currentBalance,
+    minimum_balance: minimumBalance,
+    target_balance: targetBalance,
     minimum_recharge_amount: orgConfig.minimum_recharge_amount,
-    target_balance: orgConfig.target_balance,
-    current_limit: payload.current_limit,
     recharge_amount: rechargeAmount
   });
 
@@ -280,8 +311,8 @@ async function handleAutoRecharge(
       amount: rechargeAmount,
       fee: paymentResult.fee,
       totalCharged: paymentResult.totalAmount,
-      balanceBefore: 0, // 稍后计算
-      balanceAfter: rechargeAmount, // 稍后计算
+      balanceBefore: currentBalance,
+      balanceAfter: currentBalance + rechargeAmount,
       stripePaymentIntentId: paymentResult.paymentIntentId || 'unknown',
       stripeStatus: paymentResult.status || 'unknown',
       status: 'COMPLETED',
@@ -316,6 +347,8 @@ async function handleAutoRecharge(
     recharged_amount: rechargeAmount,
     payment_intent_id: paymentResult.paymentIntentId,
     recharge_record_id: rechargeRecord.id,
+    balance_before: currentBalance,
+    balance_after: currentBalance + rechargeAmount,
     daily_recharge_count: todayRecharges + 1,
     max_daily_recharges: orgConfig.max_daily_recharges
   };
