@@ -251,7 +251,12 @@ async function handleAutoRecharge(
     recharge_amount: rechargeAmount
   });
 
-  // 3. 执行Stripe支付
+  // 3. 检查支付方式是否存在
+  if (!orgConfig.stripe_customer_id || !orgConfig.default_payment_method_id) {
+    throw new Error(`No payment method configured for organization. Customer ID: ${orgConfig.stripe_customer_id}, Payment Method: ${orgConfig.default_payment_method_id}`);
+  }
+
+  // 4. 执行Stripe支付
   const paymentResult = await StripeService.processPayment({
     customerId: orgConfig.stripe_customer_id,
     amount: rechargeAmount,
@@ -268,7 +273,7 @@ async function handleAutoRecharge(
     throw new Error(`Stripe payment failed: ${paymentResult.error}`);
   }
 
-  // 4. 记录充值记录
+  // 5. 记录充值记录
   const rechargeRecord = await prisma.rechargeRecord.create({
     data: {
       c_organization_id: orgConfig.c_organization_id,
