@@ -274,6 +274,10 @@ export class StripeService {
         payment_method: paymentMethodId,
         confirm: true,
         description: description || 'Automatic organization recharge',
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: 'never'
+        },
         metadata: {
           recharge_amount: amount.toString(),
           fee_amount: fee.toString(),
