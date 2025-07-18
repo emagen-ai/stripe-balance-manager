@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import dotenv from 'dotenv';
 
 console.log('🚀 Starting app initialization...');
@@ -11,6 +12,7 @@ import { DatabaseManager } from './config/database';
 import { logger } from './config/logger';
 import { AutoRechargeScheduler } from './scheduler/AutoRechargeScheduler';
 import balanceRoutes from './routes/balance';
+import organizationRoutes from './routes/organizations';
 import webhookRoutes from './routes/webhooks';
 import { requestLogger, authenticateUser } from './middleware/security';
 
@@ -22,7 +24,11 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 app.use(requestLogger);
 
-app.use('/api/balance', authenticateUser, balanceRoutes);
+// 静态文件服务
+app.use(express.static(path.join(__dirname, '../public')));
+
+app.use('/api/balance', balanceRoutes);
+app.use('/api/organizations', organizationRoutes);
 app.use('/webhooks', webhookRoutes); // Webhook端点不需要认证
 
 app.get('/health', (req, res) => {

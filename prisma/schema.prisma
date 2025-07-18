@@ -91,7 +91,13 @@ model OrganizationBalanceConfig {
   stripe_customer_id      String?  @unique
   litellm_team_id         String?  @unique
   
-  // 余额阈值设置
+  // 余额管理字段
+  current_balance         Decimal  @default(0) @db.Decimal(10, 2)  // 当前余额
+  least_balance           Decimal  @default(100) @db.Decimal(10, 2) // 最低余额阈值
+  add_balance_up_to       Decimal  @default(1000) @db.Decimal(10, 2) // 充值目标金额
+  org_limit               Decimal  @default(10000) @db.Decimal(10, 2) // 组织总限额
+  
+  // 兼容旧字段
   minimum_balance         Decimal  @default(100) @db.Decimal(10, 2)
   target_balance          Decimal  @default(1000) @db.Decimal(10, 2)
   
@@ -104,11 +110,50 @@ model OrganizationBalanceConfig {
   // 关联关系
   users           User[]
   rechargeRecords RechargeRecord[]
+  balanceHistory  OrganizationBalanceHistory[]
+  monthlyStats    OrganizationMonthlyStats[]
   
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
   
   @@map("organization_balance_configs")
+}
+
+// 组织余额历史记录
+model OrganizationBalanceHistory {
+  id                String   @id @default(cuid())
+  c_organization_id String
+  organization      OrganizationBalanceConfig @relation(fields: [c_organization_id], references: [c_organization_id])
+  
+  balance_before    Decimal  @db.Decimal(10, 2)
+  balance_after     Decimal  @db.Decimal(10, 2)
+  change_amount     Decimal  @db.Decimal(10, 2)
+  change_type       String   // "deposit", "usage", "adjustment"
+  description       String?
+  
+  created_at DateTime @default(now())
+  
+  @@map("organization_balance_history")
+}
+
+// 组织月度统计
+model OrganizationMonthlyStats {
+  id                    String   @id @default(cuid())
+  c_organization_id     String
+  organization          OrganizationBalanceConfig @relation(fields: [c_organization_id], references: [c_organization_id])
+  
+  year                  Int
+  month                 Int
+  balance_start_month   Decimal  @db.Decimal(10, 2) // 月初余额
+  deposit_this_month    Decimal  @default(0) @db.Decimal(10, 2) // 本月充值
+  usage_this_month      Decimal  @default(0) @db.Decimal(10, 2) // 本月使用
+  balance_end_month     Decimal  @db.Decimal(10, 2) // 月末余额
+  
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  @@unique([c_organization_id, year, month])
+  @@map("organization_monthly_stats")
 }
 
 // Webhook事件记录模型

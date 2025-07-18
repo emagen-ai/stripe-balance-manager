@@ -1,203 +1,285 @@
 import express from 'express';
-import Joi from 'joi';
-import { db } from '../config/database';
-import { BalanceMonitorService } from '../services/BalanceMonitorService';
-import { AutoRechargeService } from '../services/AutoRechargeService';
+import { PrismaClient } from '@prisma/client';
 import { logger } from '../config/logger';
-import { BalanceConfigInput } from '../types';
-import { Decimal } from '@prisma/client/runtime/library';
+import BalanceManager from '../services/balanceManager';
 
 const router = express.Router();
-const balanceMonitor = new BalanceMonitorService();
-const autoRechargeService = new AutoRechargeService();
+const prisma = new PrismaClient();
 
-const balanceConfigSchema = Joi.object({
-  minimumBalance: Joi.number().min(0).required(),
-  targetBalance: Joi.number().min(0).required(),
-  autoRechargeEnabled: Joi.boolean().required(),
-  defaultPaymentMethodId: Joi.string().optional(),
-  maxDailyRecharges: Joi.number().min(1).max(10).optional(),
-  maxRechargeAmount: Joi.number().min(100).max(100000).optional()
-}).custom((value, helpers) => {
-  if (value.targetBalance <= value.minimumBalance) {
-    return helpers.error('any.invalid', { 
-      message: 'Target balance must be greater than minimum balance' 
-    });
-  }
-  return value;
-});
-
-router.get('/config/:userId', async (req, res) => {
+/**
+ * 获取组织余额详细信息
+ */
+router.get('/:organizationId', async (req, res) => {
   try {
-    const { userId } = req.params;
-
-    const config = await db.balanceConfig.findUnique({
-      where: { userId },
-      include: {
-        user: {
-          select: {
-            email: true,
-            stripeCustomerId: true
-          }
-        }
-      }
-    });
-
-    if (!config) {
-      return res.status(404).json({ error: 'Balance configuration not found' });
-    }
-
-    res.json({
-      ...config,
-      minimumBalance: config.minimumBalance.toNumber(),
-      targetBalance: config.targetBalance.toNumber(),
-      maxRechargeAmount: config.maxRechargeAmount.toNumber()
-    });
-
-  } catch (error) {
-    logger.error('Failed to get balance config', { userId: req.params.userId, error });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.post('/config/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { error, value } = balanceConfigSchema.validate(req.body);
-
-    if (error) {
-      return res.status(400).json({ error: error.details[0].message });
-    }
-
-    const configData: BalanceConfigInput = value;
-
-    const user = await db.user.findUnique({
-      where: { id: userId }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const config = await db.balanceConfig.upsert({
-      where: { userId },
-      update: {
-        minimumBalance: new Decimal(configData.minimumBalance),
-        targetBalance: new Decimal(configData.targetBalance),
-        autoRechargeEnabled: configData.autoRechargeEnabled,
-        defaultPaymentMethodId: configData.defaultPaymentMethodId,
-        maxDailyRecharges: configData.maxDailyRecharges || 3,
-        maxRechargeAmount: new Decimal(configData.maxRechargeAmount || 10000)
-      },
-      create: {
-        userId,
-        minimumBalance: new Decimal(configData.minimumBalance),
-        targetBalance: new Decimal(configData.targetBalance),
-        autoRechargeEnabled: configData.autoRechargeEnabled,
-        defaultPaymentMethodId: configData.defaultPaymentMethodId,
-        maxDailyRecharges: configData.maxDailyRecharges || 3,
-        maxRechargeAmount: new Decimal(configData.maxRechargeAmount || 10000)
-      }
-    });
-
-    logger.info('Balance configuration updated', { userId, config: configData });
-
-    res.json({
-      ...config,
-      minimumBalance: config.minimumBalance.toNumber(),
-      targetBalance: config.targetBalance.toNumber(),
-      maxRechargeAmount: config.maxRechargeAmount.toNumber()
-    });
-
-  } catch (error) {
-    logger.error('Failed to update balance config', { userId: req.params.userId, error });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.get('/status/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const balanceCheck = await balanceMonitor.checkUserBalance(userId);
-    const canRecharge = await balanceMonitor.canUserRecharge(userId);
-
-    res.json({
-      ...balanceCheck,
-      canRecharge: canRecharge.canRecharge,
-      rechargeBlockedReason: canRecharge.reason
-    });
-
-  } catch (error) {
-    logger.error('Failed to get balance status', { userId: req.params.userId, error });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.post('/recharge/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const result = await autoRechargeService.executeAutoRecharge(userId);
-
-    if (result.success) {
-      res.json({
-        success: true,
-        message: 'Recharge completed successfully',
-        rechargeRecordId: result.rechargeRecordId,
-        amount: result.amount,
-        fee: result.fee
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: result.error
-      });
-    }
-
-  } catch (error) {
-    logger.error('Manual recharge failed', { userId: req.params.userId, error });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.get('/history/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { page = 1, limit = 20 } = req.query;
+    const { organizationId } = req.params;
     
-    const skip = (Number(page) - 1) * Number(limit);
-
-    const [records, total] = await Promise.all([
-      db.rechargeRecord.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: Number(limit)
-      }),
-      db.rechargeRecord.count({ where: { userId } })
-    ]);
-
-    const formattedRecords = records.map(record => ({
-      ...record,
-      amount: record.amount.toNumber(),
-      fee: record.fee.toNumber(),
-      totalCharged: record.totalCharged.toNumber(),
-      balanceBefore: record.balanceBefore.toNumber(),
-      balanceAfter: record.balanceAfter.toNumber()
-    }));
-
+    const balanceDetails = await BalanceManager.getOrganizationBalanceDetails(organizationId);
+    
     res.json({
-      records: formattedRecords,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        totalPages: Math.ceil(total / Number(limit))
+      success: true,
+      data: balanceDetails
+    });
+  } catch (error: any) {
+    logger.error('获取组织余额详情失败', { 
+      organizationId: req.params.organizationId, 
+      error: error.message 
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get organization balance',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * 手动检查余额并触发自动充值（前端点击检查）
+ */
+router.post('/:organizationId/check-recharge', async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    
+    logger.info('手动检查自动充值', { organization_id: organizationId });
+    
+    // 1. 检查是否需要充值
+    const checkResult = await BalanceManager.checkAndTriggerAutoRecharge(organizationId);
+    
+    if (!checkResult.needsRecharge) {
+      return res.json({
+        success: true,
+        action: 'no_recharge_needed',
+        data: checkResult
+      });
+    }
+    
+    // 2. 如果需要充值且有充值金额，执行充值
+    if (checkResult.chargeAmount && checkResult.chargeAmount > 0) {
+      const rechargeResult = await BalanceManager.executeAutoRecharge(
+        organizationId, 
+        checkResult.chargeAmount
+      );
+      
+      if (rechargeResult.success) {
+        return res.json({
+          success: true,
+          action: 'auto_recharged',
+          data: {
+            ...checkResult,
+            rechargeResult
+          }
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          action: 'recharge_failed',
+          error: rechargeResult.error,
+          data: checkResult
+        });
+      }
+    } else {
+      return res.json({
+        success: true,
+        action: 'recharge_not_possible',
+        reason: checkResult.reason,
+        data: checkResult
+      });
+    }
+    
+  } catch (error: any) {
+    logger.error('检查自动充值失败', { 
+      organizationId: req.params.organizationId, 
+      error: error.message 
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check auto recharge',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * 更新组织余额配置
+ */
+router.put('/:organizationId/config', async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    const {
+      least_balance,
+      add_balance_up_to,
+      org_limit,
+      auto_recharge_enabled
+    } = req.body;
+    
+    // 更新组织配置
+    const updatedConfig = await prisma.organizationBalanceConfig.update({
+      where: { c_organization_id: organizationId },
+      data: {
+        least_balance: least_balance ? parseFloat(least_balance) : undefined,
+        add_balance_up_to: add_balance_up_to ? parseFloat(add_balance_up_to) : undefined,
+        org_limit: org_limit ? parseFloat(org_limit) : undefined,
+        auto_recharge_enabled: auto_recharge_enabled !== undefined ? auto_recharge_enabled : undefined
       }
     });
+    
+    logger.info('组织余额配置已更新', {
+      organization_id: organizationId,
+      least_balance,
+      add_balance_up_to,
+      org_limit,
+      auto_recharge_enabled
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        id: updatedConfig.id,
+        c_organization_id: updatedConfig.c_organization_id,
+        current_balance: parseFloat(updatedConfig.current_balance.toString()),
+        least_balance: parseFloat(updatedConfig.least_balance.toString()),
+        add_balance_up_to: parseFloat(updatedConfig.add_balance_up_to.toString()),
+        org_limit: parseFloat(updatedConfig.org_limit.toString()),
+        auto_recharge_enabled: updatedConfig.auto_recharge_enabled
+      }
+    });
+    
+  } catch (error: any) {
+    logger.error('更新组织余额配置失败', { 
+      organizationId: req.params.organizationId, 
+      error: error.message 
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update balance config',
+      message: error.message
+    });
+  }
+});
 
-  } catch (error) {
-    logger.error('Failed to get recharge history', { userId: req.params.userId, error });
-    res.status(500).json({ error: 'Internal server error' });
+/**
+ * 获取组织余额历史
+ */
+router.get('/:organizationId/history', async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    const { limit = 20, offset = 0 } = req.query;
+    
+    const history = await prisma.organizationBalanceHistory.findMany({
+      where: { c_organization_id: organizationId },
+      orderBy: { created_at: 'desc' },
+      take: parseInt(limit as string),
+      skip: parseInt(offset as string)
+    });
+    
+    res.json({
+      success: true,
+      data: history.map(h => ({
+        id: h.id,
+        balance_before: parseFloat(h.balance_before.toString()),
+        balance_after: parseFloat(h.balance_after.toString()),
+        change_amount: parseFloat(h.change_amount.toString()),
+        change_type: h.change_type,
+        description: h.description,
+        created_at: h.created_at
+      }))
+    });
+    
+  } catch (error: any) {
+    logger.error('获取组织余额历史失败', { 
+      organizationId: req.params.organizationId, 
+      error: error.message 
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get balance history',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * 获取组织月度统计
+ */
+router.get('/:organizationId/monthly-stats', async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    const { year, month } = req.query;
+    
+    let whereCondition: any = { c_organization_id: organizationId };
+    
+    if (year) {
+      whereCondition.year = parseInt(year as string);
+    }
+    if (month) {
+      whereCondition.month = parseInt(month as string);
+    }
+    
+    const stats = await prisma.organizationMonthlyStats.findMany({
+      where: whereCondition,
+      orderBy: [
+        { year: 'desc' },
+        { month: 'desc' }
+      ]
+    });
+    
+    res.json({
+      success: true,
+      data: stats.map(s => ({
+        id: s.id,
+        year: s.year,
+        month: s.month,
+        balance_start_month: parseFloat(s.balance_start_month.toString()),
+        deposit_this_month: parseFloat(s.deposit_this_month.toString()),
+        usage_this_month: parseFloat(s.usage_this_month.toString()),
+        balance_end_month: parseFloat(s.balance_end_month.toString()),
+        created_at: s.created_at,
+        updated_at: s.updated_at
+      }))
+    });
+    
+  } catch (error: any) {
+    logger.error('获取组织月度统计失败', { 
+      organizationId: req.params.organizationId, 
+      error: error.message 
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get monthly stats',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * 手动更新LiteLLM team limit
+ */
+router.post('/:organizationId/update-team-limit', async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    
+    await BalanceManager.updateTeamLimitInLiteLLM(organizationId);
+    
+    res.json({
+      success: true,
+      message: 'Team limit updated successfully'
+    });
+    
+  } catch (error: any) {
+    logger.error('更新team limit失败', { 
+      organizationId: req.params.organizationId, 
+      error: error.message 
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update team limit',
+      message: error.message
+    });
   }
 });
 

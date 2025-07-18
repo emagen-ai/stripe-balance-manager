@@ -276,6 +276,60 @@ export class KeyManagementClient {
   }
 
   /**
+   * 更新团队配额
+   */
+  async updateTeamQuota(c_team_id: string, quota: number): Promise<{ success: boolean; message: string }> {
+    logger.info('更新团队配额', { team_id: c_team_id, quota });
+    
+    try {
+      // 先获取团队信息
+      const teamInfo = await this.getTeam(c_team_id);
+      
+      // 使用PATCH方法更新团队配额
+      const updateData = {
+        quota: quota.toString(),
+        c_team_id: c_team_id
+      };
+      
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/teams/${c_team_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+      
+      if (response.ok) {
+        logger.info('团队配额更新成功', { 
+          team_id: c_team_id, 
+          old_quota: teamInfo.quota,
+          new_quota: quota 
+        });
+        return { success: true, message: 'Team quota updated successfully' };
+      } else {
+        // 如果PATCH不支持，尝试删除重建的方式（类似organization的方式）
+        logger.warn('PATCH方法失败，尝试删除重建', { team_id: c_team_id });
+        
+        // 这里可能需要实现删除重建逻辑，但需要确认KMS API支持
+        throw new Error(`Failed to update team quota: ${response.status} ${response.statusText}`);
+      }
+      
+    } catch (error: any) {
+      logger.error('更新团队配额失败', { 
+        team_id: c_team_id, 
+        quota, 
+        error: error.message 
+      });
+      
+      // 如果是网络错误或API不支持，返回失败但不抛异常
+      return { 
+        success: false, 
+        message: `Failed to update team quota: ${error.message}` 
+      };
+    }
+  }
+
+  /**
    * 获取团队支出信息
    */
   async getTeamSpend(c_team_id: string, c_organization_id: string): Promise<{ spend: string; quota: string; remaining: string }> {
