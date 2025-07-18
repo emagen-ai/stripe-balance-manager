@@ -156,7 +156,11 @@ export class StripeService {
         customer: params.customer,
         metadata: params.metadata,
         payment_method_types: ['card'],
-        usage: 'off_session'
+        usage: 'off_session',
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: 'never'
+        }
       });
       
       logger.info('Setup intent created', { setupIntentId: setupIntent.id, customerId: params.customer });
@@ -271,6 +275,10 @@ export class StripeService {
         confirmation_method: 'automatic',
         confirm: true,
         description: description || 'Automatic organization recharge',
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: 'never'
+        },
         metadata: {
           recharge_amount: amount.toString(),
           fee_amount: fee.toString(),
