@@ -440,6 +440,111 @@ router.get('/:organizationId/payment-methods', async (req, res) => {
 });
 
 /**
+ * 添加支付方式到组织
+ */
+router.post('/:organizationId/payment-methods', async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+    const { payment_method_id, set_as_default } = req.body;
+    
+    if (!payment_method_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment method ID is required'
+      });
+    }
+
+    const organization = await prisma.organizationBalanceConfig.findUnique({
+      where: { c_organization_id: organizationId }
+    });
+
+    if (!organization) {
+      return res.status(404).json({
+        success: false,
+        error: 'Organization not found'
+      });
+    }
+
+    // 确保有 Stripe 客户
+    let customerId = organization.stripe_customer_id;
+    if (!customerId || customerId === 'cus_test123') {
+      try {
+        const customer = await StripeService.createCustomer({
+          metadata: {
+            organization_id: organizationId,
+            litellm_team_id: organization.litellm_team_id || ''
+          }
+        });
+        
+        customerId = customer.id;
+        
+        await prisma.organizationBalanceConfig.update({
+          where: { c_organization_id: organizationId },
+          data: { stripe_customer_id: customerId }
+        });
+      } catch (stripeError: any) {
+        logger.error('创建Stripe客户失败', { error: stripeError.message, organizationId });
+        return res.status(500).json({
+          success: false,
+          error: `Failed to create Stripe customer: ${stripeError.message}`
+        });
+      }
+    }
+
+    try {
+      // 将支付方式附加到客户
+      await StripeService.attachPaymentMethodToCustomer(payment_method_id, customerId);
+      
+      // 如果需要设为默认
+      if (set_as_default || !organization.default_payment_method_id) {
+        await StripeService.setDefaultPaymentMethod(customerId, payment_method_id);
+        
+        await prisma.organizationBalanceConfig.update({
+          where: { c_organization_id: organizationId },
+          data: { default_payment_method_id: payment_method_id }
+        });
+      }
+
+      // 获取支付方式详情
+      const paymentMethod = await StripeService.getPaymentMethod(payment_method_id);
+      
+      logger.info('支付方式已添加', {
+        c_organization_id: organizationId,
+        stripe_customer_id: customerId,
+        payment_method_id: payment_method_id,
+        set_as_default: set_as_default || !organization.default_payment_method_id
+      });
+
+      res.json({
+        success: true,
+        payment_method: {
+          id: paymentMethod.id,
+          type: paymentMethod.type,
+          brand: paymentMethod.card?.brand,
+          last4: paymentMethod.card?.last4,
+          exp_month: paymentMethod.card?.exp_month,
+          exp_year: paymentMethod.card?.exp_year,
+          is_default: set_as_default || !organization.default_payment_method_id,
+          created_at: new Date(paymentMethod.created * 1000).toISOString()
+        }
+      });
+    } catch (stripeError: any) {
+      logger.error('添加支付方式失败', { error: stripeError.message, organizationId, payment_method_id });
+      res.status(500).json({
+        success: false,
+        error: `Failed to add payment method: ${stripeError.message}`
+      });
+    }
+  } catch (error: any) {
+    logger.error('添加支付方式失败', { error: error.message, organizationId: req.params.organizationId });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add payment method'
+    });
+  }
+});
+
+/**
  * 删除组织配置
  */
 router.delete('/:organizationId', async (req, res) => {

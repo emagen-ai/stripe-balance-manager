@@ -8,19 +8,16 @@ datasource db {
 }
 
 model User {
-  id               String           @id @default(cuid())
-  email            String           @unique
-  stripeCustomerId String           @unique
-  
-  // 组织关联字段
+  id                String                     @id @default(cuid())
+  email             String                     @unique
+  stripeCustomerId  String                     @unique
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
   c_organization_id String?
   litellm_team_id   String?
-  
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  balanceConfig    BalanceConfig?
-  rechargeHistory  RechargeRecord[]
-  organization     OrganizationBalanceConfig? @relation(fields: [c_organization_id], references: [c_organization_id])
+  balanceConfig     BalanceConfig?
+  rechargeHistory   RechargeRecord[]
+  organization      OrganizationBalanceConfig? @relation(fields: [c_organization_id], references: [c_organization_id])
 
   @@map("users")
 }
@@ -42,32 +39,26 @@ model BalanceConfig {
 }
 
 model RechargeRecord {
-  id                    String         @id @default(cuid())
-  userId                String?        // 改为可选，支持组织级充值
-  user                  User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // 组织关联字段
-  c_organization_id     String?
-  organization          OrganizationBalanceConfig? @relation(fields: [c_organization_id], references: [c_organization_id])
-  
-  amount                Decimal        @db.Decimal(10, 2)
-  fee                   Decimal        @db.Decimal(10, 2)
-  totalCharged          Decimal        @db.Decimal(10, 2)
-  balanceBefore         Decimal        @db.Decimal(10, 2)
-  balanceAfter          Decimal        @db.Decimal(10, 2)
-  stripePaymentIntentId String         @unique
+  id                    String                     @id @default(cuid())
+  userId                String?
+  amount                Decimal                    @db.Decimal(10, 2)
+  fee                   Decimal                    @db.Decimal(10, 2)
+  totalCharged          Decimal                    @db.Decimal(10, 2)
+  balanceBefore         Decimal                    @db.Decimal(10, 2)
+  balanceAfter          Decimal                    @db.Decimal(10, 2)
+  stripePaymentIntentId String                     @unique
   stripeStatus          String
-  status                RechargeStatus @default(PENDING)
-  isAutomatic           Boolean        @default(true)
-  
-  // Webhook相关字段
-  triggeredBy           String         @default("manual") // manual, webhook, scheduled
-  triggered_by_webhook  Boolean        @default(false)
-  webhook_event_id      String?
-  
+  status                RechargeStatus             @default(PENDING)
+  isAutomatic           Boolean                    @default(true)
   failureReason         String?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  c_organization_id     String?
+  triggeredBy           String                     @default("manual")
+  triggered_by_webhook  Boolean                    @default(false)
+  webhook_event_id      String?
+  organization          OrganizationBalanceConfig? @relation(fields: [c_organization_id], references: [c_organization_id])
+  user                  User?                      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("recharge_records")
 }
@@ -84,93 +75,75 @@ model DailyRechargeLimit {
   @@map("daily_recharge_limits")
 }
 
-// 组织级余额配置模型
 model OrganizationBalanceConfig {
-  id                      String   @id @default(cuid())
-  c_organization_id       String   @unique
-  stripe_customer_id      String?  @unique
-  litellm_team_id         String?  @unique
-  
-  // 余额管理字段
-  current_balance         Decimal  @default(0) @db.Decimal(10, 2)  // 当前余额
-  least_balance           Decimal  @default(0) @db.Decimal(10, 2) // 最低余额阈值，默认为0
-  add_balance_up_to       Decimal  @default(1000) @db.Decimal(10, 2) // 充值目标金额
-  org_limit               Decimal  @default(10000) @db.Decimal(10, 2) // 组织总限额
-  
-  // 兼容旧字段
-  minimum_balance         Decimal  @default(0) @db.Decimal(10, 2) // 默认修改为0
-  target_balance          Decimal  @default(1000) @db.Decimal(10, 2)
-  
-  // 自动充值和扣费设置
-  auto_recharge_enabled   Boolean  @default(true)  // 自动充值开关
-  auto_deduct_enabled     Boolean  @default(false) // 自动扣费开关，默认关闭
+  id                        String                       @id @default(cuid())
+  c_organization_id         String                       @unique
+  stripe_customer_id        String?                      @unique
+  litellm_team_id           String?                      @unique
+  minimum_balance           Decimal                      @default(0) @db.Decimal(10, 2)
+  target_balance            Decimal                      @default(1000) @db.Decimal(10, 2)
+  auto_recharge_enabled     Boolean                      @default(true)
   default_payment_method_id String?
-  max_daily_recharges     Int      @default(5)
-  minimum_recharge_amount Decimal  @default(100) @db.Decimal(10, 2)
-  
-  // 关联关系
-  users           User[]
-  rechargeRecords RechargeRecord[]
-  balanceHistory  OrganizationBalanceHistory[]
-  monthlyStats    OrganizationMonthlyStats[]
-  
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  
+  max_daily_recharges       Int                          @default(5)
+  minimum_recharge_amount   Decimal                      @default(100) @db.Decimal(10, 2)
+  created_at                DateTime                     @default(now())
+  updated_at                DateTime                     @updatedAt
+  add_balance_up_to         Decimal                      @default(1000) @db.Decimal(10, 2)
+  current_balance           Decimal                      @default(0) @db.Decimal(10, 2)
+  least_balance             Decimal                      @default(0) @db.Decimal(10, 2)
+  org_limit                 Decimal                      @default(10000) @db.Decimal(10, 2)
+  auto_deduct_enabled       Boolean                      @default(false)
+  balanceHistory            OrganizationBalanceHistory[]
+  monthlyStats              OrganizationMonthlyStats[]
+  rechargeRecords           RechargeRecord[]
+  users                     User[]
+
   @@map("organization_balance_configs")
 }
 
-// 组织余额历史记录
 model OrganizationBalanceHistory {
-  id                String   @id @default(cuid())
+  id                String                    @id @default(cuid())
   c_organization_id String
-  organization      OrganizationBalanceConfig @relation(fields: [c_organization_id], references: [c_organization_id])
-  
-  balance_before    Decimal  @db.Decimal(10, 2)
-  balance_after     Decimal  @db.Decimal(10, 2)
-  change_amount     Decimal  @db.Decimal(10, 2)
-  change_type       String   // "deposit", "usage", "adjustment"
+  balance_before    Decimal                   @db.Decimal(10, 2)
+  balance_after     Decimal                   @db.Decimal(10, 2)
+  change_amount     Decimal                   @db.Decimal(10, 2)
+  change_type       String
   description       String?
-  
-  created_at DateTime @default(now())
-  
+  created_at        DateTime                  @default(now())
+  organization      OrganizationBalanceConfig @relation(fields: [c_organization_id], references: [c_organization_id])
+
   @@map("organization_balance_history")
 }
 
-// 组织月度统计
 model OrganizationMonthlyStats {
-  id                    String   @id @default(cuid())
-  c_organization_id     String
-  organization          OrganizationBalanceConfig @relation(fields: [c_organization_id], references: [c_organization_id])
-  
-  year                  Int
-  month                 Int
-  balance_start_month   Decimal  @db.Decimal(10, 2) // 月初余额
-  deposit_this_month    Decimal  @default(0) @db.Decimal(10, 2) // 本月充值
-  usage_this_month      Decimal  @default(0) @db.Decimal(10, 2) // 本月使用
-  balance_end_month     Decimal  @db.Decimal(10, 2) // 月末余额
-  
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  
+  id                  String                    @id @default(cuid())
+  c_organization_id   String
+  year                Int
+  month               Int
+  balance_start_month Decimal                   @db.Decimal(10, 2)
+  deposit_this_month  Decimal                   @default(0) @db.Decimal(10, 2)
+  usage_this_month    Decimal                   @default(0) @db.Decimal(10, 2)
+  balance_end_month   Decimal                   @db.Decimal(10, 2)
+  created_at          DateTime                  @default(now())
+  updated_at          DateTime                  @updatedAt
+  organization        OrganizationBalanceConfig @relation(fields: [c_organization_id], references: [c_organization_id])
+
   @@unique([c_organization_id, year, month])
   @@map("organization_monthly_stats")
 }
 
-// Webhook事件记录模型
 model WebhookEvent {
-  id            String   @id @default(cuid())
-  event_type    String   // limit_exceeded, payment_success, etc.
-  team_id       String
+  id              String   @id @default(cuid())
+  event_type      String
+  team_id         String
   organization_id String?
-  payload       Json     // 完整的webhook payload
-  processed     Boolean  @default(false)
-  success       Boolean  @default(false)
-  error_message String?
-  response_data Json?
-  
-  created_at DateTime @default(now())
-  
+  payload         Json
+  processed       Boolean  @default(false)
+  success         Boolean  @default(false)
+  error_message   String?
+  response_data   Json?
+  created_at      DateTime @default(now())
+
   @@map("webhook_events")
 }
 
