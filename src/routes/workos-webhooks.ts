@@ -476,9 +476,64 @@ router.post('/workos/manual-create-org', express.json(), async (req, res) => {
     });
     
     if (existingOrg) {
+      // 如果组织存在但没有 Stripe Customer ID，为其创建
+      if (!existingOrg.stripe_customer_id) {
+        logger.info('🔄 Organization exists but missing Stripe Customer, creating one', {
+          organizationId,
+          organizationName
+        });
+        
+        try {
+          // 创建 Stripe Customer
+          const stripeCustomer = await StripeService.createCustomer({
+            name: organizationName || `Organization ${organizationId}`,
+            email: `org-${organizationId}@workos-manual.generated`,
+            metadata: {
+              workos_organization_id: organizationId,
+              source: 'manual_creation',
+              created_by: 'manual_migration'
+            }
+          });
+          
+          // 更新数据库
+          const updatedOrg = await prisma.organizationBalanceConfig.update({
+            where: { c_organization_id: organizationId },
+            data: { stripe_customer_id: stripeCustomer.id }
+          });
+          
+          logger.info('✅ Stripe Customer created and linked to existing organization', {
+            organizationId,
+            stripe_customer_id: stripeCustomer.id
+          });
+          
+          return res.json({
+            success: true,
+            message: 'Stripe Customer created and linked to existing organization',
+            data: {
+              organizationId,
+              stripe_customer_id: stripeCustomer.id,
+              database_id: updatedOrg.id,
+              updated_at: updatedOrg.updated_at
+            },
+            timestamp: new Date().toISOString()
+          });
+          
+        } catch (stripeError: any) {
+          logger.error('❌ Failed to create Stripe Customer for existing organization', {
+            organizationId,
+            error: stripeError.message
+          });
+          return res.status(500).json({
+            error: 'Failed to create Stripe Customer',
+            message: stripeError.message,
+            organizationId
+          });
+        }
+      }
+      
       return res.json({
         success: false,
-        message: 'Organization already exists',
+        message: 'Organization already exists with Stripe Customer',
         organizationId,
         stripe_customer_id: existingOrg.stripe_customer_id,
         created_at: existingOrg.created_at
