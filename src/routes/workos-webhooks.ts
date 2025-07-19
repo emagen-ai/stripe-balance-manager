@@ -7,21 +7,70 @@ const router = express.Router();
 const prisma = DatabaseManager.getInstance();
 
 // WorkOS webhook 签名验证
+// WorkOS 使用格式: "t=timestamp, v1=signature"
 function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
   try {
+    logger.info('🔍 Parsing WorkOS signature format', { 
+      signatureFormat: signature,
+      payloadLength: payload.length
+    });
+    
+    // 解析 WorkOS 签名格式: "t=timestamp, v1=signature"
+    const signatureParts = signature.split(', ');
+    let timestamp = '';
+    let receivedSignature = '';
+    
+    for (const part of signatureParts) {
+      const [key, value] = part.split('=');
+      if (key === 't') {
+        timestamp = value;
+      } else if (key === 'v1') {
+        receivedSignature = value;
+      }
+    }
+    
+    if (!timestamp || !receivedSignature) {
+      logger.error('❌ Invalid WorkOS signature format', { 
+        timestamp, 
+        hasSignature: !!receivedSignature,
+        signatureFormat: signature
+      });
+      return false;
+    }
+    
+    logger.info('✅ Parsed WorkOS signature', { 
+      timestamp, 
+      signaturePrefix: receivedSignature.substring(0, 10) + '...'
+    });
+    
+    // 构建签名字符串: timestamp + . + payload
+    const signaturePayload = timestamp + '.' + payload;
+    
+    // 生成期望的签名
     const expectedSignature = crypto
       .createHmac('sha256', secret)
-      .update(payload, 'utf8')
+      .update(signaturePayload, 'utf8')
       .digest('hex');
-      
-    const receivedSignature = signature.replace('sha256=', '');
     
+    logger.info('🔐 Signature verification details', {
+      signaturePayloadLength: signaturePayload.length,
+      expectedSigLength: expectedSignature.length,
+      receivedSigLength: receivedSignature.length
+    });
+    
+    // 比较签名
     return crypto.timingSafeEqual(
       Buffer.from(expectedSignature, 'hex'),
       Buffer.from(receivedSignature, 'hex')
     );
+    
   } catch (error) {
-    logger.error('Webhook signature verification error:', error);
+    logger.error('❌ Webhook signature verification error', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      code: (error as any)?.code,
+      signature: signature.substring(0, 50) + '...',
+      payloadLength: payload.length
+    });
     return false;
   }
 }
