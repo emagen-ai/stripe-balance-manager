@@ -221,7 +221,9 @@ async function handleOrganizationDeleted(orgData: any) {
 }
 
 // WorkOS webhook 端点 - 使用混淆路径以提高安全性
-router.post('/workos/wos_sync_endpoint_secure_2024', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/workos/wos_sync_endpoint_secure_2024', 
+  express.raw({ type: 'application/json', limit: '50mb' }), 
+  async (req, res) => {
   const startTime = Date.now();
   const requestId = Math.random().toString(36).substring(2, 15);
   

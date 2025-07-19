@@ -71,16 +71,20 @@ app.use(cors(corsOptions));
 // 显式处理所有 OPTIONS 请求
 app.options('*', cors(corsOptions));
 
-app.use(express.json());
 app.use(requestLogger);
 
-// Add routes
+// Webhook routes MUST be added BEFORE express.json() to preserve raw body
+app.use('/webhooks', webhookRoutes); // Stripe Webhook端点不需要认证
+app.use('/webhooks', workosWebhookRoutes); // WorkOS Webhook端点不需要认证
+
+// JSON parsing middleware - applied after webhook routes
+app.use(express.json());
+
+// Add other routes
 app.use('/api/balance', balanceRoutes); // 余额管理API（管理工具，暂不需要认证）
 app.use('/api/payment', authenticateUser, paymentRoutes);
 app.use('/api/organizations', organizationRoutes); // 组织管理端点
 app.use('/api/kms', kmsProxyRoutes); // KMS代理端点
-app.use('/webhooks', webhookRoutes); // Stripe Webhook端点不需要认证
-app.use('/webhooks', workosWebhookRoutes); // WorkOS Webhook端点不需要认证
 
 // Serve static files for payment setup page
 app.use(express.static('public'));

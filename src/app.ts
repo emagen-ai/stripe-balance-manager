@@ -70,17 +70,21 @@ app.use(cors(corsOptions));
 // 显式处理所有 OPTIONS 请求
 app.options('*', cors(corsOptions));
 
-app.use(express.json());
 app.use(requestLogger);
 
 // 静态文件服务
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Webhook routes MUST be added BEFORE express.json() to preserve raw body
+app.use('/webhooks', webhookRoutes); // Stripe Webhook端点不需要认证
+app.use('/webhooks', workosWebhookRoutes); // WorkOS Webhook端点不需要认证
+
+// JSON parsing middleware - applied after webhook routes
+app.use(express.json());
+
 // API路由
 app.use('/api/balance', balanceRoutes); // 余额管理API（管理工具，暂不需要认证）
 app.use('/api/organizations', organizationRoutes);
-app.use('/webhooks', webhookRoutes); // Stripe Webhook端点不需要认证
-app.use('/webhooks', workosWebhookRoutes); // WorkOS Webhook端点不需要认证
 
 app.get('/health', (req, res) => {
   res.json({ 
