@@ -31,10 +31,12 @@ const corsOptions = {
       'http://localhost:1088',
       'http://localhost:3000',
       'https://localhost:3000',
+      // Railway 部署的前端URL（如果有）
+      process.env.FRONTEND_URL,
       // 如果有其他前端域名，添加在这里
-    ];
+    ].filter(Boolean); // 过滤掉undefined值
     
-    // 允许无 origin 的请求（比如 Postman）
+    // 允许无 origin 的请求（比如 Postman、服务器端请求）
     if (!origin) {
       callback(null, true);
       return;
@@ -44,24 +46,36 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      // 在生产环境中，您可能想要记录被拒绝的来源
-      logger.warn(`CORS request from unauthorized origin: ${origin}`);
-      callback(null, true); // 暂时允许所有来源，生产环境可以改为 false
+      // 在开发环境允许所有，生产环境拒绝
+      if (process.env.NODE_ENV === 'development') {
+        logger.warn(`CORS request from unauthorized origin: ${origin} (allowed in dev mode)`);
+        callback(null, true);
+      } else {
+        logger.warn(`CORS request blocked from unauthorized origin: ${origin}`);
+        callback(new Error(`CORS policy: origin ${origin} not allowed`));
+      }
     }
   },
   credentials: true, // 允许携带认证信息
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  maxAge: 86400 // 预检请求的缓存时间（24小时）
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id'],
+  exposedHeaders: ['Content-Length', 'X-Request-Id'],
+  maxAge: 86400, // 预检请求的缓存时间（24小时）
+  optionsSuccessStatus: 200 // 某些旧浏览器（IE11）对204有问题
 };
 
 app.use(cors(corsOptions));
+
+// 显式处理所有 OPTIONS 请求
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 app.use(requestLogger);
 
 // 静态文件服务
 app.use(express.static(path.join(__dirname, '../public')));
 
+// API路由
 app.use('/api/balance', balanceRoutes); // 余额管理API（管理工具，暂不需要认证）
 app.use('/api/organizations', organizationRoutes);
 app.use('/webhooks', webhookRoutes); // Webhook端点不需要认证
