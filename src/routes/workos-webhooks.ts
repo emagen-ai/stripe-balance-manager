@@ -256,8 +256,25 @@ router.post('/workos/wos_sync_endpoint_secure_2024', express.raw({ type: 'applic
       signaturePrefix: signature.substring(0, 20) + '...'
     });
     
+    // 调试请求体信息
+    logger.info('🔍 Request body debug info', {
+      requestId,
+      bodyType: typeof req.body,
+      isBuffer: Buffer.isBuffer(req.body),
+      bodyLength: req.body?.length || 0,
+      bodyConstructor: req.body?.constructor?.name || 'unknown'
+    });
+    
     // 验证 webhook 签名
-    const payload = req.body.toString('utf8');
+    const payload = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body);
+    
+    logger.info('🔍 Payload debug info', {
+      requestId,
+      payloadType: typeof payload,
+      payloadLength: payload.length,
+      payloadStart: payload.substring(0, 100)
+    });
+    
     const isValid = verifyWebhookSignature(payload, signature, webhookSecret);
     
     if (!isValid) {
