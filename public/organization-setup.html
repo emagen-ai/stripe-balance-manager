@@ -539,13 +539,27 @@
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label">最小余额 (USD)</label>
-                        <input type="number" id="min-balance" class="form-input" value="100" min="0" step="10">
+                        <label class="form-label">最低余额阈值 (least_balance) (USD)</label>
+                        <input type="number" id="least-balance" class="form-input" value="100" min="0" step="10">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            💡 当余额低于此值时触发自动充值
+                        </div>
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label">目标余额 (USD)</label>
-                        <input type="number" id="target-balance" class="form-input" value="1000" min="0" step="50">
+                        <label class="form-label">充值目标金额 (add_balance_up_to) (USD)</label>
+                        <input type="number" id="add-balance-up-to" class="form-input" value="1000" min="0" step="50">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            💡 自动充值会将余额充到此金额
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">组织月度限额 (org_limit) (USD)</label>
+                        <input type="number" id="org-limit" class="form-input" value="10000" min="0" step="100">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            💡 每月最多可充值金额（防止过度充值）
+                        </div>
                     </div>
                     
                     <div class="form-group">
@@ -693,6 +707,9 @@
                     <div class="form-group">
                         <button class="btn" onclick="sendTestWebhook()">
                             🚀 发送测试Webhook
+                        </button>
+                        <button class="btn btn-warning" onclick="checkAndTriggerRecharge()">
+                            💰 检查并触发充值
                         </button>
                         <button class="btn btn-secondary" onclick="testKMSConnection()">
                             🔌 测试KMS连接
@@ -874,8 +891,9 @@
                     const data = await response.json();
                     if (data.success) {
                         const org = data.organization;
-                        document.getElementById('min-balance').value = org.minimum_balance;
-                        document.getElementById('target-balance').value = org.target_balance;
+                        document.getElementById('least-balance').value = org.least_balance || org.minimum_balance;
+                        document.getElementById('add-balance-up-to').value = org.add_balance_up_to || org.target_balance;
+                        document.getElementById('org-limit').value = org.org_limit || 10000;
                         document.getElementById('min-recharge').value = org.minimum_recharge_amount;
                         document.getElementById('daily-limit').value = org.max_daily_recharges;
                         document.getElementById('auto-recharge').checked = org.auto_recharge_enabled;
@@ -904,8 +922,11 @@
                 const config = {
                     c_organization_id: currentOrganization.c_organization_id,
                     litellm_team_id: currentOrganization.l_team_id,
-                    minimum_balance: parseFloat(document.getElementById('min-balance').value),
-                    target_balance: parseFloat(document.getElementById('target-balance').value),
+                    least_balance: parseFloat(document.getElementById('least-balance').value),
+                    add_balance_up_to: parseFloat(document.getElementById('add-balance-up-to').value),
+                    org_limit: parseFloat(document.getElementById('org-limit').value),
+                    minimum_balance: parseFloat(document.getElementById('least-balance').value), // 兼容旧字段
+                    target_balance: parseFloat(document.getElementById('add-balance-up-to').value), // 兼容旧字段
                     minimum_recharge_amount: parseFloat(document.getElementById('min-recharge').value),
                     max_daily_recharges: parseInt(document.getElementById('daily-limit').value),
                     auto_recharge_enabled: document.getElementById('auto-recharge').checked
@@ -1393,6 +1414,70 @@
                 document.getElementById('test-output').textContent = 
                     `KMS连接测试失败\n\n错误信息:\n${error.message}`;
                 showAlert('error', 'KMS连接测试失败');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // 检查并触发充值
+        async function checkAndTriggerRecharge() {
+            const organizationId = document.getElementById('test-organization').value;
+            
+            if (!organizationId) {
+                showAlert('error', '请先选择测试组织');
+                return;
+            }
+            
+            showLoading(true);
+            try {
+                // 调用余额管理API检查并触发充值
+                const response = await fetch(`${API_BASE}/api/balance/${organizationId}/check-recharge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                document.getElementById('test-results').style.display = 'block';
+                
+                if (data.success) {
+                    if (data.action === 'no_recharge_needed') {
+                        document.getElementById('test-output').textContent = 
+                            `✅ 余额充足，无需充值\n\n` +
+                            `当前余额: $${data.data.currentBalance}\n` +
+                            `最低余额阈值: $${data.data.leastBalance}\n` +
+                            `原因: ${data.data.reason}`;
+                        showAlert('success', '余额充足，无需充值');
+                    } else if (data.action === 'auto_recharged') {
+                        document.getElementById('test-output').textContent = 
+                            `💰 自动充值成功！\n\n` +
+                            `充值前余额: $${data.data.currentBalance}\n` +
+                            `充值金额: $${data.data.chargeAmount}\n` +
+                            `支付Intent ID: ${data.data.rechargeResult.paymentIntentId}\n` +
+                            `新余额: $${data.data.rechargeResult.newBalance}`;
+                        showAlert('success', '自动充值成功！');
+                    } else if (data.action === 'recharge_not_possible') {
+                        document.getElementById('test-output').textContent = 
+                            `⚠️ 需要充值但无法执行\n\n` +
+                            `当前余额: $${data.data.currentBalance}\n` +
+                            `最低余额阈值: $${data.data.leastBalance}\n` +
+                            `原因: ${data.reason}`;
+                        showAlert('warning', data.reason);
+                    }
+                } else {
+                    document.getElementById('test-output').textContent = 
+                        `❌ 检查充值失败\n\n` +
+                        `错误: ${data.error}\n` +
+                        `详情: ${data.message}`;
+                    showAlert('error', data.message || '检查充值失败');
+                }
+                
+            } catch (error) {
+                console.error('检查充值失败:', error);
+                document.getElementById('test-results').style.display = 'block';
+                document.getElementById('test-output').textContent = 
+                    `❌ 检查充值失败\n\n错误信息:\n${error.message}`;
+                showAlert('error', '检查充值失败');
             } finally {
                 showLoading(false);
             }
