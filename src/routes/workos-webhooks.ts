@@ -454,7 +454,7 @@ router.get('/workos/health', (req, res) => {
 });
 
 // 手动创建现有组织的端点（用于迁移已有组织）
-router.post('/workos/manual-create-org', async (req, res) => {
+router.post('/workos/manual-create-org', express.json(), async (req, res) => {
   try {
     const { organizationId, organizationName } = req.body;
     
