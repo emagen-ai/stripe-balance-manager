@@ -31,17 +31,28 @@ async function handleOrganizationCreated(orgData: any) {
   try {
     const { id: workos_org_id, name } = orgData;
     
-    logger.info('Handling organization.created event', { workos_org_id, name });
+    logger.info('🏢 Started handling organization.created event', { 
+      workos_org_id, 
+      name,
+      orgDataKeys: Object.keys(orgData || {})
+    });
     
     // 检查组织是否已存在
+    logger.info('🔍 Checking if organization already exists in database', { workos_org_id });
     const existingOrg = await prisma.organizationBalanceConfig.findUnique({
       where: { c_organization_id: workos_org_id }
     });
     
     if (existingOrg) {
-      logger.info('Organization already exists, skipping creation', { workos_org_id });
+      logger.info('⚠️ Organization already exists, skipping creation', { 
+        workos_org_id,
+        existing_balance: existingOrg.current_balance,
+        existing_created_at: existingOrg.created_at
+      });
       return;
     }
+    
+    logger.info('📝 Creating new organization balance configuration', { workos_org_id, name });
     
     // 创建组织余额配置
     const organization = await prisma.organizationBalanceConfig.create({
@@ -59,15 +70,22 @@ async function handleOrganizationCreated(orgData: any) {
       }
     });
     
-    logger.info('Organization balance config created successfully', {
+    logger.info('✅ Organization balance config created successfully', {
       workos_org_id,
       name,
-      id: organization.id,
-      current_balance: organization.current_balance
+      database_id: organization.id,
+      current_balance: organization.current_balance,
+      auto_recharge_enabled: organization.auto_recharge_enabled,
+      created_at: organization.created_at
     });
     
   } catch (error) {
-    logger.error('Error handling organization.created event:', error);
+    logger.error('❌ Error handling organization.created event', {
+      workos_org_id: orgData?.id,
+      name: orgData?.name,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace'
+    });
     throw error;
   }
 }
@@ -141,63 +159,139 @@ async function handleOrganizationDeleted(orgData: any) {
 
 // WorkOS webhook 端点 - 使用混淆路径以提高安全性
 router.post('/workos/wos_sync_endpoint_secure_2024', express.raw({ type: 'application/json' }), async (req, res) => {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substring(2, 15);
+  
+  // 记录请求接收
+  logger.info('🔔 WorkOS Webhook Request Received', {
+    requestId,
+    timestamp: new Date().toISOString(),
+    userAgent: req.headers['user-agent'],
+    contentType: req.headers['content-type'],
+    contentLength: req.headers['content-length'],
+    origin: req.headers['origin'] || 'N/A',
+    hasSignature: !!req.headers['workos-signature']
+  });
+
   try {
     // 获取 webhook 签名和密钥
     const signature = req.headers['workos-signature'] as string;
     const webhookSecret = process.env.WORKOS_WEBHOOK_SECRET || 'Y8QkpVN9O5b9CKQdgpnIDKenf';
     
     if (!signature) {
-      logger.warn('WorkOS webhook received without signature');
-      return res.status(401).json({ error: 'Missing signature' });
+      logger.warn('❌ WorkOS webhook received without signature', { requestId });
+      return res.status(401).json({ 
+        error: 'Missing signature',
+        requestId,
+        timestamp: new Date().toISOString()
+      });
     }
+    
+    // 记录签名验证开始
+    logger.info('🔐 Verifying webhook signature', { 
+      requestId,
+      signaturePrefix: signature.substring(0, 20) + '...'
+    });
     
     // 验证 webhook 签名
     const payload = req.body.toString('utf8');
     const isValid = verifyWebhookSignature(payload, signature, webhookSecret);
     
     if (!isValid) {
-      logger.warn('WorkOS webhook signature verification failed', { signature });
-      return res.status(401).json({ error: 'Invalid signature' });
+      logger.warn('❌ WorkOS webhook signature verification failed', { 
+        requestId,
+        signature: signature.substring(0, 20) + '...',
+        payloadLength: payload.length
+      });
+      return res.status(401).json({ 
+        error: 'Invalid signature',
+        requestId,
+        timestamp: new Date().toISOString()
+      });
     }
+    
+    logger.info('✅ Webhook signature verified successfully', { requestId });
     
     // 解析 webhook 数据
     const webhookData = JSON.parse(payload);
     const { event, data } = webhookData;
     
-    logger.info('WorkOS webhook received', { event, organization_id: data?.id });
+    logger.info('📥 WorkOS webhook data parsed', { 
+      requestId,
+      event, 
+      organization_id: data?.id,
+      organization_name: data?.name,
+      dataKeys: Object.keys(data || {})
+    });
     
     // 根据事件类型处理
+    let processingResult = { success: false, action: 'unknown' };
+    
     switch (event) {
       case 'organization.created':
+        logger.info('🏢 Processing organization.created event', { requestId, orgId: data?.id });
         await handleOrganizationCreated(data);
+        processingResult = { success: true, action: 'created' };
         break;
         
       case 'organization.updated':
+        logger.info('📝 Processing organization.updated event', { requestId, orgId: data?.id });
         await handleOrganizationUpdated(data);
+        processingResult = { success: true, action: 'updated' };
         break;
         
       case 'organization.deleted':
+        logger.info('🗑️ Processing organization.deleted event', { requestId, orgId: data?.id });
         await handleOrganizationDeleted(data);
+        processingResult = { success: true, action: 'deleted' };
         break;
         
       default:
-        logger.info('Unhandled WorkOS webhook event', { event });
+        logger.info('⚠️ Unhandled WorkOS webhook event', { requestId, event });
+        processingResult = { success: true, action: 'ignored' };
         break;
     }
+    
+    const processingTime = Date.now() - startTime;
+    
+    // 记录成功处理
+    logger.info('✅ WorkOS webhook processed successfully', {
+      requestId,
+      event,
+      organization_id: data?.id,
+      action: processingResult.action,
+      processingTimeMs: processingTime,
+      timestamp: new Date().toISOString()
+    });
     
     // 返回成功响应
     res.status(200).json({ 
       success: true, 
       message: 'Webhook processed successfully',
+      requestId,
       event,
+      action: processingResult.action,
+      organization_id: data?.id,
+      processingTimeMs: processingTime,
       timestamp: new Date().toISOString()
     });
     
   } catch (error) {
-    logger.error('WorkOS webhook processing error:', error);
+    const processingTime = Date.now() - startTime;
+    
+    logger.error('❌ WorkOS webhook processing error', {
+      requestId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      processingTimeMs: processingTime,
+      timestamp: new Date().toISOString()
+    });
+    
     res.status(500).json({ 
       error: 'Webhook processing failed',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      message: error instanceof Error ? error.message : 'Unknown error',
+      requestId,
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -209,6 +303,34 @@ router.get('/workos/health', (req, res) => {
     service: 'workos-webhook',
     timestamp: new Date().toISOString()
   });
+});
+
+// 测试端点 - 模拟 WorkOS webhook 调用（仅用于测试）
+router.post('/workos/test', async (req, res) => {
+  try {
+    const testOrgData = {
+      id: 'org_test_' + Date.now(),
+      name: 'Test Organization ' + new Date().toLocaleTimeString()
+    };
+    
+    logger.info('🧪 Testing WorkOS webhook simulation', { testOrgData });
+    
+    await handleOrganizationCreated(testOrgData);
+    
+    res.json({
+      success: true,
+      message: 'Test webhook processed successfully',
+      testOrgData,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('❌ Test webhook failed', error);
+    res.status(500).json({
+      error: 'Test webhook failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 export default router;
