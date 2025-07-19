@@ -2,9 +2,28 @@ import express from 'express';
 import crypto from 'crypto';
 import { logger } from '../config/logger';
 import { DatabaseManager } from '../config/database';
+import { StripeService } from '../config/stripe';
 
 const router = express.Router();
 const prisma = DatabaseManager.getInstance();
+
+// 辅助函数：根据 WorkOS 组织 ID 获取 Stripe Customer ID
+async function getStripeCustomerIdByOrgId(workosOrgId: string): Promise<string | null> {
+  try {
+    const org = await prisma.organizationBalanceConfig.findUnique({
+      where: { c_organization_id: workosOrgId },
+      select: { stripe_customer_id: true }
+    });
+    
+    return org?.stripe_customer_id || null;
+  } catch (error) {
+    logger.error('Failed to get Stripe Customer ID for organization', {
+      workosOrgId,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    return null;
+  }
+}
 
 // WorkOS webhook 签名验证
 // WorkOS 使用格式: "t=timestamp, v1=signature"
@@ -117,10 +136,40 @@ async function handleOrganizationCreated(orgData: any) {
     
     logger.info('📝 Creating new organization balance configuration', { workos_org_id, name });
     
-    // 创建组织余额配置
+    // 1. 首先在 Stripe 创建 Customer
+    logger.info('💳 Creating Stripe Customer for organization', { workos_org_id, name });
+    let stripeCustomer;
+    try {
+      stripeCustomer = await StripeService.createCustomer({
+        name: name || `Organization ${workos_org_id}`,
+        email: `org-${workos_org_id}@workos-auto.generated`,
+        metadata: {
+          workos_organization_id: workos_org_id,
+          source: 'workos_webhook',
+          created_by: 'auto_sync'
+        }
+      });
+      
+      logger.info('✅ Stripe Customer created successfully', {
+        workos_org_id,
+        stripe_customer_id: stripeCustomer.id,
+        customer_email: stripeCustomer.email
+      });
+    } catch (stripeError: any) {
+      logger.error('❌ Failed to create Stripe Customer', {
+        workos_org_id,
+        name,
+        error: stripeError.message,
+        stack: stripeError.stack
+      });
+      throw new Error(`Failed to create Stripe Customer: ${stripeError.message}`);
+    }
+    
+    // 2. 创建组织余额配置（包含 Stripe Customer ID）
     const organization = await prisma.organizationBalanceConfig.create({
       data: {
         c_organization_id: workos_org_id,
+        stripe_customer_id: stripeCustomer.id,      // 存储 Stripe Customer ID 映射
         minimum_balance: 100,        // 默认最低余额 $100
         target_balance: 1000,        // 默认充值目标 $1000
         auto_recharge_enabled: true, // 默认启用自动充值
@@ -137,6 +186,7 @@ async function handleOrganizationCreated(orgData: any) {
       workos_org_id,
       name,
       database_id: organization.id,
+      stripe_customer_id: organization.stripe_customer_id,
       current_balance: organization.current_balance,
       auto_recharge_enabled: organization.auto_recharge_enabled,
       created_at: organization.created_at
@@ -200,16 +250,32 @@ async function handleOrganizationDeleted(orgData: any) {
       logger.info('Organization marked for deletion', {
         workos_org_id,
         name,
+        stripe_customer_id: existingOrg.stripe_customer_id,
         current_balance: existingOrg.current_balance,
         auto_recharge_enabled: existingOrg.auto_recharge_enabled
       });
       
-      // 可以选择删除或标记为已删除
+      // 注意：出于安全考虑，我们不会自动删除 Stripe Customer 和数据库记录
+      // 这样可以保留支付历史和审计记录
+      
+      // 如果需要完全删除，可以取消以下注释：
+      // if (existingOrg.stripe_customer_id) {
+      //   logger.info('Would delete Stripe Customer (currently disabled for safety)', {
+      //     stripe_customer_id: existingOrg.stripe_customer_id
+      //   });
+      //   // 注意：删除 Stripe Customer 会删除所有相关的支付方式和历史记录
+      //   // await stripe.customers.del(existingOrg.stripe_customer_id);
+      // }
+      // 
       // await prisma.organizationBalanceConfig.delete({
       //   where: { c_organization_id: workos_org_id }
       // });
       
-      logger.info('Organization deletion processed', { workos_org_id });
+      logger.info('Organization deletion processed (data preserved for audit)', { 
+        workos_org_id,
+        stripe_customer_id: existingOrg.stripe_customer_id,
+        note: 'Data preserved for audit purposes'
+      });
     } else {
       logger.info('Organization not found during deletion', { workos_org_id });
     }
