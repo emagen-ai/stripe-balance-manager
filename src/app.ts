@@ -27,7 +27,7 @@ app.use(requestLogger);
 // 静态文件服务
 app.use(express.static(path.join(__dirname, '../public')));
 
-app.use('/api/balance', balanceRoutes);
+app.use('/api/balance', balanceRoutes); // 余额管理API（管理工具，暂不需要认证）
 app.use('/api/organizations', organizationRoutes);
 app.use('/webhooks', webhookRoutes); // Webhook端点不需要认证
 

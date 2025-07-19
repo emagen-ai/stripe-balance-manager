@@ -26,7 +26,7 @@ app.use(express.json());
 app.use(requestLogger);
 
 // Add routes
-app.use('/api/balance', authenticateUser, balanceRoutes);
+app.use('/api/balance', balanceRoutes); // 余额管理API（管理工具，暂不需要认证）
 app.use('/api/payment', authenticateUser, paymentRoutes);
 app.use('/api/organizations', organizationRoutes); // 组织管理端点
 app.use('/api/kms', kmsProxyRoutes); // KMS代理端点
