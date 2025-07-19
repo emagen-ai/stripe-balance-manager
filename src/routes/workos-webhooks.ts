@@ -165,11 +165,51 @@ async function handleOrganizationCreated(orgData: any) {
       throw new Error(`Failed to create Stripe Customer: ${stripeError.message}`);
     }
     
-    // 2. 创建组织余额配置（包含 Stripe Customer ID）
+    // 2. 在 KMS 中创建组织
+    logger.info('🔧 Creating organization in KMS', { workos_org_id, name });
+    let kmsOrgResponse;
+    try {
+      const kmsApiUrl = process.env.KMS_API_URL || 'http://172.171.97.248:3090';
+      const kmsResponse = await fetch(`${kmsApiUrl}/organizations/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          c_organization_id: workos_org_id,
+          quota: 10000.00,          // 默认配额 $10,000
+          min_limit: 100.00,        // 默认告警阈值 $100
+          check_interval: 600       // 默认检查间隔 600秒
+        })
+      });
+      
+      if (kmsResponse.ok) {
+        kmsOrgResponse = await kmsResponse.json();
+        logger.info('✅ KMS organization created successfully', {
+          workos_org_id,
+          kms_response: kmsOrgResponse
+        });
+      } else {
+        const errorText = await kmsResponse.text();
+        logger.warn('⚠️ KMS organization creation failed but continuing', {
+          workos_org_id,
+          kms_status: kmsResponse.status,
+          kms_error: errorText
+        });
+      }
+    } catch (kmsError: any) {
+      logger.warn('⚠️ KMS API error but continuing with balance config creation', {
+        workos_org_id,
+        kms_error: kmsError.message
+      });
+    }
+    
+    // 3. 创建组织余额配置（包含 Stripe Customer ID）
     const organization = await prisma.organizationBalanceConfig.create({
       data: {
         c_organization_id: workos_org_id,
         stripe_customer_id: stripeCustomer.id,      // 存储 Stripe Customer ID 映射
+        litellm_team_id: kmsOrgResponse?.l_team_id, // 存储 LiteLLM Team ID（如果有）
         minimum_balance: 100,        // 默认最低余额 $100
         target_balance: 1000,        // 默认充值目标 $1000
         auto_recharge_enabled: true, // 默认启用自动充值
@@ -495,10 +535,52 @@ router.post('/workos/manual-create-org', express.json(), async (req, res) => {
             }
           });
           
+          // 在 KMS 中创建组织（如果还没有）
+          logger.info('🔧 Creating organization in KMS for existing org', { organizationId });
+          let kmsOrgResponse;
+          try {
+            const kmsApiUrl = process.env.KMS_API_URL || 'http://172.171.97.248:3090';
+            const kmsResponse = await fetch(`${kmsApiUrl}/organizations/`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                c_organization_id: organizationId,
+                quota: 10000.00,          // 默认配额 $10,000
+                min_limit: 100.00,        // 默认告警阈值 $100
+                check_interval: 600       // 默认检查间隔 600秒
+              })
+            });
+            
+            if (kmsResponse.ok) {
+              kmsOrgResponse = await kmsResponse.json();
+              logger.info('✅ KMS organization created successfully for existing org', {
+                organizationId,
+                kms_response: kmsOrgResponse
+              });
+            } else {
+              const errorText = await kmsResponse.text();
+              logger.warn('⚠️ KMS organization creation failed for existing org', {
+                organizationId,
+                kms_status: kmsResponse.status,
+                kms_error: errorText
+              });
+            }
+          } catch (kmsError: any) {
+            logger.warn('⚠️ KMS API error for existing org', {
+              organizationId,
+              kms_error: kmsError.message
+            });
+          }
+          
           // 更新数据库
           const updatedOrg = await prisma.organizationBalanceConfig.update({
             where: { c_organization_id: organizationId },
-            data: { stripe_customer_id: stripeCustomer.id }
+            data: { 
+              stripe_customer_id: stripeCustomer.id,
+              litellm_team_id: kmsOrgResponse?.l_team_id // 存储 LiteLLM Team ID（如果有）
+            }
           });
           
           logger.info('✅ Stripe Customer created and linked to existing organization', {
