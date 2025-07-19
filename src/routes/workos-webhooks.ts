@@ -453,6 +453,73 @@ router.get('/workos/health', (req, res) => {
   });
 });
 
+// 手动创建现有组织的端点（用于迁移已有组织）
+router.post('/workos/manual-create-org', async (req, res) => {
+  try {
+    const { organizationId, organizationName } = req.body;
+    
+    if (!organizationId) {
+      return res.status(400).json({
+        error: 'Missing organizationId',
+        message: 'organizationId is required'
+      });
+    }
+    
+    logger.info('🔧 Manual organization creation requested', { 
+      organizationId, 
+      organizationName 
+    });
+    
+    // 检查组织是否已存在
+    const existingOrg = await prisma.organizationBalanceConfig.findUnique({
+      where: { c_organization_id: organizationId }
+    });
+    
+    if (existingOrg) {
+      return res.json({
+        success: false,
+        message: 'Organization already exists',
+        organizationId,
+        stripe_customer_id: existingOrg.stripe_customer_id,
+        created_at: existingOrg.created_at
+      });
+    }
+    
+    // 使用现有的处理逻辑
+    await handleOrganizationCreated({
+      id: organizationId,
+      name: organizationName || `Organization ${organizationId}`
+    });
+    
+    // 获取创建的结果
+    const createdOrg = await prisma.organizationBalanceConfig.findUnique({
+      where: { c_organization_id: organizationId }
+    });
+    
+    res.json({
+      success: true,
+      message: 'Organization created successfully',
+      data: {
+        organizationId,
+        stripe_customer_id: createdOrg?.stripe_customer_id,
+        database_id: createdOrg?.id,
+        created_at: createdOrg?.created_at
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('❌ Manual organization creation failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace'
+    });
+    res.status(500).json({
+      error: 'Manual organization creation failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // 测试端点 - 模拟 WorkOS webhook 调用（仅用于测试）
 router.post('/workos/test', async (req, res) => {
   try {
