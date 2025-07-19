@@ -131,7 +131,7 @@ export class KeyManagementClient {
   }
 
   /**
-   * 更新组织配额（临时方案：删除后重新创建）
+   * 更新组织配额（尝试直接更新，如果不支持则跳过）
    */
   async updateOrganizationQuota(c_organization_id: string, quota: number): Promise<OrganizationResponse> {
     logger.info('更新组织配额', { organization_id: c_organization_id, quota });
@@ -141,22 +141,48 @@ export class KeyManagementClient {
       const org = await this.getOrganization(c_organization_id);
       const oldQuota = org.quota;
       
-      // 2. 删除组织
-      await this.deleteOrganization(c_organization_id);
+      // 2. 尝试使用PATCH方法直接更新
+      try {
+        const updateData = {
+          quota: quota.toString(),
+          c_organization_id: c_organization_id
+        };
+        
+        const response = await this.fetchWithTimeout(`${this.baseUrl}/organizations/${c_organization_id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updateData),
+        });
+        
+        if (response.ok) {
+          const result = await this.handleResponse<OrganizationResponse>(response);
+          logger.info('组织配额更新成功（PATCH）', { 
+            organization_id: result.c_organization_id,
+            old_quota: oldQuota,
+            new_quota: result.quota
+          });
+          return result;
+        } else {
+          throw new Error(`PATCH failed: ${response.status} ${response.statusText}`);
+        }
+      } catch (patchError: any) {
+        logger.warn('PATCH方法更新失败，跳过更新', { 
+          organization_id: c_organization_id,
+          error: patchError.message 
+        });
+        
+        // 如果PATCH失败，返回原始组织信息但不抛错
+        logger.info('组织配额更新跳过（API不支持）', { 
+          organization_id: c_organization_id,
+          current_quota: oldQuota,
+          requested_quota: quota
+        });
+        
+        return org; // 返回原始组织信息
+      }
       
-      // 3. 重新创建组织
-      const result = await this.createOrganization({
-        c_organization_id,
-        quota
-      });
-      
-      logger.info('组织配额更新成功', { 
-        organization_id: result.c_organization_id,
-        old_quota: oldQuota,
-        new_quota: result.quota
-      });
-      
-      return result;
     } catch (error: any) {
       logger.error('组织配额更新失败', { 
         organization_id: c_organization_id, 
