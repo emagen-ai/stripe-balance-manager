@@ -14,6 +14,7 @@ import { AutoRechargeScheduler } from './scheduler/AutoRechargeScheduler';
 import balanceRoutes from './routes/balance';
 import paymentRoutes from './routes/payment';
 import webhookRoutes from './routes/webhooks';
+import workosWebhookRoutes from './routes/workos-webhooks';
 import organizationRoutes from './routes/organizations';
 import kmsProxyRoutes from './routes/kms-proxy';
 import { requestLogger, authenticateUser } from './middleware/security';
@@ -78,7 +79,8 @@ app.use('/api/balance', balanceRoutes); // 余额管理API（管理工具，暂�
 app.use('/api/payment', authenticateUser, paymentRoutes);
 app.use('/api/organizations', organizationRoutes); // 组织管理端点
 app.use('/api/kms', kmsProxyRoutes); // KMS代理端点
-app.use('/webhooks', webhookRoutes); // Webhook端点不需要认证
+app.use('/webhooks', webhookRoutes); // Stripe Webhook端点不需要认证
+app.use('/webhooks', workosWebhookRoutes); // WorkOS Webhook端点不需要认证
 
 // Serve static files for payment setup page
 app.use(express.static('public'));

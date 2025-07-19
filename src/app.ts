@@ -15,6 +15,7 @@ import { AutoRechargeScheduler } from './scheduler/AutoRechargeScheduler';
 import balanceRoutes from './routes/balance';
 import organizationRoutes from './routes/organizations';
 import webhookRoutes from './routes/webhooks';
+import workosWebhookRoutes from './routes/workos-webhooks';
 import { requestLogger, authenticateUser } from './middleware/security';
 
 console.log('✅ Dependencies loaded');
@@ -78,7 +79,8 @@ app.use(express.static(path.join(__dirname, '../public')));
 // API路由
 app.use('/api/balance', balanceRoutes); // 余额管理API（管理工具，暂不需要认证）
 app.use('/api/organizations', organizationRoutes);
-app.use('/webhooks', webhookRoutes); // Webhook端点不需要认证
+app.use('/webhooks', webhookRoutes); // Stripe Webhook端点不需要认证
+app.use('/webhooks', workosWebhookRoutes); // WorkOS Webhook端点不需要认证
 
 app.get('/health', (req, res) => {
   res.json({ 

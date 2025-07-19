@@ -13,6 +13,47 @@ router.get('/:organizationId', async (req, res) => {
   try {
     const { organizationId } = req.params;
     
+    // 首先检查组织是否存在
+    const existingOrg = await prisma.organizationBalanceConfig.findUnique({
+      where: { c_organization_id: organizationId }
+    });
+    
+    // 如果组织不存在，自动创建默认配置
+    if (!existingOrg) {
+      logger.info('Organization not found, creating default configuration', { organizationId });
+      
+      try {
+        await prisma.organizationBalanceConfig.create({
+          data: {
+            c_organization_id: organizationId,
+            minimum_balance: 100,        // 默认最低余额 $100
+            target_balance: 1000,        // 默认充值目标 $1000
+            auto_recharge_enabled: true, // 默认启用自动充值
+            current_balance: 0,          // 初始余额为 $0
+            least_balance: 100,          // 最低余额阈值
+            add_balance_up_to: 1000,     // 充值到此金额
+            org_limit: 10000,           // 默认组织限额 $10,000
+            max_daily_recharges: 5,     // 默认每日最大充值次数
+            minimum_recharge_amount: 100 // 默认最小充值金额 $100
+          }
+        });
+        
+        logger.info('Default organization configuration created successfully', { organizationId });
+      } catch (createError: any) {
+        logger.error('Failed to create default organization configuration', { 
+          organizationId, 
+          error: createError.message 
+        });
+        
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to create organization configuration',
+          message: 'Organization does not exist and could not be created automatically'
+        });
+      }
+    }
+    
+    // 获取余额详情
     const balanceDetails = await BalanceManager.getOrganizationBalanceDetails(organizationId);
     
     res.json({
