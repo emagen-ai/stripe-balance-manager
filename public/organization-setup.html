@@ -1311,19 +1311,28 @@
         function updateTestOrganizationSelect(organizations) {
             const select = document.getElementById('test-org');
             select.innerHTML = '<option value="">选择测试组织</option>' + 
-                organizations.map(org => `<option value="${org.l_team_id}">${org.c_organization_id}</option>`).join('');
+                organizations.map(org => `<option value="${org.c_organization_id}">${org.c_organization_id} (Team: ${org.l_team_id})</option>`).join('');
         }
         
         // 发送测试Webhook
         async function sendTestWebhook() {
-            const teamId = document.getElementById('test-org').value;
+            const organizationId = document.getElementById('test-org').value;
             const usage = parseInt(document.getElementById('test-usage').value);
             const limit = parseInt(document.getElementById('test-limit').value);
             
-            if (!teamId) {
+            if (!organizationId) {
                 showAlert('error', '请选择测试组织');
                 return;
             }
+            
+            // 从KMS组织数据中找到对应的团队ID
+            const selectedOrg = kmsOrganizations.find(org => org.c_organization_id === organizationId);
+            if (!selectedOrg) {
+                showAlert('error', '找不到对应的组织信息');
+                return;
+            }
+            
+            const teamId = selectedOrg.l_team_id;
             
             showLoading(true);
             try {
