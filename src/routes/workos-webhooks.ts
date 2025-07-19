@@ -209,7 +209,7 @@ async function handleOrganizationCreated(orgData: any) {
       data: {
         c_organization_id: workos_org_id,
         stripe_customer_id: stripeCustomer.id,      // 存储 Stripe Customer ID 映射
-        litellm_team_id: kmsOrgResponse?.l_team_id, // 存储 LiteLLM Team ID（如果有）
+        litellm_team_id: (kmsOrgResponse as any)?.l_team_id, // 存储 LiteLLM Team ID（如果有）
         minimum_balance: 100,        // 默认最低余额 $100
         target_balance: 1000,        // 默认充值目标 $1000
         auto_recharge_enabled: true, // 默认启用自动充值
@@ -579,7 +579,7 @@ router.post('/workos/manual-create-org', express.json(), async (req, res) => {
             where: { c_organization_id: organizationId },
             data: { 
               stripe_customer_id: stripeCustomer.id,
-              litellm_team_id: kmsOrgResponse?.l_team_id // 存储 LiteLLM Team ID（如果有）
+              litellm_team_id: (kmsOrgResponse as any)?.l_team_id // 存储 LiteLLM Team ID（如果有）
             }
           });
           
