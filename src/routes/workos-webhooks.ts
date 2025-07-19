@@ -657,6 +657,122 @@ router.post('/workos/manual-create-org', express.json(), async (req, res) => {
   }
 });
 
+// 为现有组织同步 KMS 的端点
+router.post('/workos/sync-kms', express.json(), async (req, res) => {
+  try {
+    const { organizationId } = req.body;
+    
+    if (!organizationId) {
+      return res.status(400).json({
+        error: 'Missing organizationId',
+        message: 'organizationId is required'
+      });
+    }
+    
+    logger.info('🔧 KMS sync requested for organization', { organizationId });
+    
+    // 检查组织是否存在
+    const existingOrg = await prisma.organizationBalanceConfig.findUnique({
+      where: { c_organization_id: organizationId }
+    });
+    
+    if (!existingOrg) {
+      return res.status(404).json({
+        error: 'Organization not found',
+        message: 'Organization does not exist in balance system',
+        organizationId
+      });
+    }
+    
+    // 在 KMS 中创建组织
+    logger.info('🔧 Creating organization in KMS', { organizationId });
+    let kmsOrgResponse;
+    try {
+      const kmsApiUrl = process.env.KMS_API_URL || 'http://172.171.97.248:3090';
+      const kmsResponse = await fetch(`${kmsApiUrl}/organizations/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          c_organization_id: organizationId,
+          quota: 10000.00,          // 默认配额 $10,000
+          min_limit: 100.00,        // 默认告警阈值 $100
+          check_interval: 600       // 默认检查间隔 600秒
+        })
+      });
+      
+      if (kmsResponse.ok) {
+        kmsOrgResponse = await kmsResponse.json();
+        logger.info('✅ KMS organization created successfully', {
+          organizationId,
+          kms_response: kmsOrgResponse
+        });
+        
+        // 更新数据库中的 LiteLLM Team ID
+        if ((kmsOrgResponse as any)?.l_team_id) {
+          await prisma.organizationBalanceConfig.update({
+            where: { c_organization_id: organizationId },
+            data: { litellm_team_id: (kmsOrgResponse as any).l_team_id }
+          });
+          
+          logger.info('✅ LiteLLM Team ID updated in database', {
+            organizationId,
+            litellm_team_id: (kmsOrgResponse as any).l_team_id
+          });
+        }
+        
+        return res.json({
+          success: true,
+          message: 'KMS organization created and synced successfully',
+          data: {
+            organizationId,
+            kms_response: kmsOrgResponse,
+            litellm_team_id: (kmsOrgResponse as any)?.l_team_id
+          },
+          timestamp: new Date().toISOString()
+        });
+        
+      } else {
+        const errorText = await kmsResponse.text();
+        logger.error('❌ KMS organization creation failed', {
+          organizationId,
+          kms_status: kmsResponse.status,
+          kms_error: errorText
+        });
+        
+        return res.status(500).json({
+          error: 'KMS organization creation failed',
+          message: errorText,
+          kms_status: kmsResponse.status,
+          organizationId
+        });
+      }
+    } catch (kmsError: any) {
+      logger.error('❌ KMS API error', {
+        organizationId,
+        kms_error: kmsError.message
+      });
+      
+      return res.status(500).json({
+        error: 'KMS API error',
+        message: kmsError.message,
+        organizationId
+      });
+    }
+    
+  } catch (error) {
+    logger.error('❌ KMS sync failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace'
+    });
+    res.status(500).json({
+      error: 'KMS sync failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // 测试端点 - 模拟 WorkOS webhook 调用（仅用于测试）
 router.post('/workos/test', async (req, res) => {
   try {
