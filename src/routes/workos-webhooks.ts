@@ -55,8 +55,22 @@ function verifyWebhookSignature(payload: string, signature: string, secret: stri
     logger.info('🔐 Signature verification details', {
       signaturePayloadLength: signaturePayload.length,
       expectedSigLength: expectedSignature.length,
-      receivedSigLength: receivedSignature.length
+      receivedSigLength: receivedSignature.length,
+      expectedSigSample: expectedSignature.substring(0, 10) + '...',
+      receivedSigSample: receivedSignature.substring(0, 10) + '...',
+      payloadSample: payload.substring(0, 50) + '...'
     });
+    
+    // 确保两个签名长度相同
+    if (expectedSignature.length !== receivedSignature.length) {
+      logger.error('❌ Signature length mismatch', {
+        expectedLength: expectedSignature.length,
+        receivedLength: receivedSignature.length,
+        expectedSig: expectedSignature,
+        receivedSig: receivedSignature
+      });
+      return false;
+    }
     
     // 比较签名
     return crypto.timingSafeEqual(
