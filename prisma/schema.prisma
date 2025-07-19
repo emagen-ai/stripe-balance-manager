@@ -93,16 +93,17 @@ model OrganizationBalanceConfig {
   
   // 余额管理字段
   current_balance         Decimal  @default(0) @db.Decimal(10, 2)  // 当前余额
-  least_balance           Decimal  @default(100) @db.Decimal(10, 2) // 最低余额阈值
+  least_balance           Decimal  @default(0) @db.Decimal(10, 2) // 最低余额阈值，默认为0
   add_balance_up_to       Decimal  @default(1000) @db.Decimal(10, 2) // 充值目标金额
   org_limit               Decimal  @default(10000) @db.Decimal(10, 2) // 组织总限额
   
   // 兼容旧字段
-  minimum_balance         Decimal  @default(100) @db.Decimal(10, 2)
+  minimum_balance         Decimal  @default(0) @db.Decimal(10, 2) // 默认修改为0
   target_balance          Decimal  @default(1000) @db.Decimal(10, 2)
   
-  // 自动充值设置
-  auto_recharge_enabled   Boolean  @default(true)
+  // 自动充值和扣费设置
+  auto_recharge_enabled   Boolean  @default(true)  // 自动充值开关
+  auto_deduct_enabled     Boolean  @default(false) // 自动扣费开关，默认关闭
   default_payment_method_id String?
   max_daily_recharges     Int      @default(5)
   minimum_recharge_amount Decimal  @default(100) @db.Decimal(10, 2)

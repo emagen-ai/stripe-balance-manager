@@ -407,6 +407,8 @@ export class BalanceManager {
     leastBalance: number;
     addBalanceUpTo: number;
     orgLimit: number;
+    autoRechargeEnabled: boolean;
+    autoDeductEnabled: boolean;
     monthlyStats: any;
     recentHistory: any[];
   }> {
@@ -447,6 +449,8 @@ export class BalanceManager {
         leastBalance: parseFloat(orgConfig.least_balance.toString()),
         addBalanceUpTo: parseFloat(orgConfig.add_balance_up_to.toString()),
         orgLimit: parseFloat(orgConfig.org_limit.toString()),
+        autoRechargeEnabled: orgConfig.auto_recharge_enabled,
+        autoDeductEnabled: orgConfig.auto_deduct_enabled,
         monthlyStats,
         recentHistory
       };

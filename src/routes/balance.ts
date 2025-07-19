@@ -151,17 +151,19 @@ router.put('/:organizationId/config', async (req, res) => {
       least_balance,
       add_balance_up_to,
       org_limit,
-      auto_recharge_enabled
+      auto_recharge_enabled,
+      auto_deduct_enabled
     } = req.body;
     
     // 更新组织配置
     const updatedConfig = await prisma.organizationBalanceConfig.update({
       where: { c_organization_id: organizationId },
       data: {
-        least_balance: least_balance ? parseFloat(least_balance) : undefined,
+        least_balance: least_balance !== undefined ? parseFloat(least_balance) : undefined,
         add_balance_up_to: add_balance_up_to ? parseFloat(add_balance_up_to) : undefined,
         org_limit: org_limit ? parseFloat(org_limit) : undefined,
-        auto_recharge_enabled: auto_recharge_enabled !== undefined ? auto_recharge_enabled : undefined
+        auto_recharge_enabled: auto_recharge_enabled !== undefined ? auto_recharge_enabled : undefined,
+        auto_deduct_enabled: auto_deduct_enabled !== undefined ? auto_deduct_enabled : undefined
       }
     });
     
@@ -170,7 +172,8 @@ router.put('/:organizationId/config', async (req, res) => {
       least_balance,
       add_balance_up_to,
       org_limit,
-      auto_recharge_enabled
+      auto_recharge_enabled,
+      auto_deduct_enabled
     });
     
     res.json({
@@ -182,7 +185,8 @@ router.put('/:organizationId/config', async (req, res) => {
         least_balance: parseFloat(updatedConfig.least_balance.toString()),
         add_balance_up_to: parseFloat(updatedConfig.add_balance_up_to.toString()),
         org_limit: parseFloat(updatedConfig.org_limit.toString()),
-        auto_recharge_enabled: updatedConfig.auto_recharge_enabled
+        auto_recharge_enabled: updatedConfig.auto_recharge_enabled,
+        auto_deduct_enabled: updatedConfig.auto_deduct_enabled
       }
     });
     

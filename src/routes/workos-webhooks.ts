@@ -210,11 +210,12 @@ async function handleOrganizationCreated(orgData: any) {
         c_organization_id: workos_org_id,
         stripe_customer_id: stripeCustomer.id,      // 存储 Stripe Customer ID 映射
         litellm_team_id: (kmsOrgResponse as any)?.l_team_id, // 存储 LiteLLM Team ID（如果有）
-        minimum_balance: 100,        // 默认最低余额 $100
+        minimum_balance: 0,          // 默认最低余额 $0
         target_balance: 1000,        // 默认充值目标 $1000
         auto_recharge_enabled: true, // 默认启用自动充值
+        auto_deduct_enabled: false,  // 默认关闭自动扣费
         current_balance: 0,          // 初始余额为 $0
-        least_balance: 100,          // 最低余额阈值
+        least_balance: 0,            // 最低余额阈值 $0
         add_balance_up_to: 1000,     // 充值到此金额
         org_limit: 10000,           // 默认组织限额 $10,000
         max_daily_recharges: 5,     // 默认每日最大充值次数
